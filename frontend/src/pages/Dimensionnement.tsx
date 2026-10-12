@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
-import { AlertTriangle, CheckCircle2, GitCompare, ListTree, Loader2, MapPinned, Ruler, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitCompare, ListTree, Loader2, MapPinned, Ruler, Save, ShieldCheck } from "lucide-react";
 import {
-  getDimParametres, getDimResult, getDimStatus, getProjects, getSimResult, getSimStatus,
-  messageErreur, runDimensionnement, runSimulation,
+  getDimParametres, getDimResult, getDimStatus, getProject, getProjects, getSimResult, getSimStatus,
+  messageErreur, runDimensionnement, runSimulation, updateSection,
 } from "../api/client";
 import {
   SYSTEM_LABELS, type DimParametres, type DimResultat, type DimSortie, type EtudeResultat, type Project,
@@ -206,7 +206,7 @@ export default function Dimensionnement() {
       )}
 
       {dim.resultat && solution && (
-        <Solution key={`${dim.suivi?.task_id}-${choix}`} r={solution} ac={ac} projectId={projectId}
+        <Solution key={`${dim.suivi?.task_id}-${choix}`} r={solution} ac={ac} deux={systeme === "ac2x25"} projectId={projectId}
           titre={dim.resultat.mode === "comparer" ? `Variante à ${libP(solution.p_unite, ac)} par sous-station` : "Solution proposée (puissance adaptée à chaque sous-station)"} />
       )}
       {dim.resultat?.mode === "dimensionner" && !dim.resultat.resultat.ok && (
@@ -258,8 +258,26 @@ function Comparaison({ variantes, ac, choix, onChoix }: {
   );
 }
 
-function Solution({ r, ac, projectId, titre }: { r: DimResultat; ac: boolean; projectId: string; titre: string }) {
+function Solution({ r, ac, deux, projectId, titre }: { r: DimResultat; ac: boolean; deux: boolean; projectId: string; titre: string }) {
   const verif = useTache<SimulationTask, EtudeResultat>({ statut: getSimStatus, resultat: getSimResult });
+  const [application, setApplication] = useState<"idle" | "confirmer" | "envoi" | "fait">("idle");
+  const [erreurApplication, setErreurApplication] = useState<string | null>(null);
+
+  // Remplace les sous-stations et les postes du projet par la solution (appliquerDim en V1)
+  const appliquer = async () => {
+    setApplication("envoi");
+    setErreurApplication(null);
+    try {
+      const P = await getProject(projectId);
+      const postes = r.postes.map(p => (deux ? { ...p, at: "oui" } : p));
+      const P1 = await updateSection(projectId, "sous_stations", r.sst, P._meta.version);
+      await updateSection(projectId, "postes", postes, P1._meta.version);
+      setApplication("fait");
+    } catch (e) {
+      setErreurApplication(messageErreur(e));
+      setApplication("idle");
+    }
+  };
   const u = ac ? "kVA" : "kW";
 
   const schema = useMemo<EChartsOption>(() => ({
@@ -383,6 +401,29 @@ function Solution({ r, ac, projectId, titre }: { r: DimResultat; ac: boolean; pr
         {verif.erreur && <p style={{ color: "var(--clr-danger)", marginTop: 12 }}>{verif.erreur}</p>}
       </div>
       {verif.etat === "done" && verif.resultat && <ResultatsEtude r={verif.resultat} />}
+
+      <div className="card" style={{ marginTop: "var(--sp-md)" }}>
+        <div className="card-title"><Save size={16} style={{ color: C.primary }} /> Appliquer au projet</div>
+        <p style={{ fontSize: "0.85rem", color: "var(--clr-muted)", marginBottom: 12 }}>
+          Remplace les sous-stations et les postes du projet par cette solution ({r.n} SST, {r.postes.length} postes).
+          Le reste du projet n'est pas modifié.
+        </p>
+        {application === "fait" ? (
+          <p style={{ color: "var(--clr-accent)", display: "flex", gap: 8, alignItems: "center" }}>
+            <CheckCircle2 size={16} /> Solution appliquée : relancez une simulation pour la vérifier en détail.
+          </p>
+        ) : application === "confirmer" ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-danger" onClick={appliquer}><Save size={16} /> Confirmer le remplacement</button>
+            <button className="btn btn-ghost" onClick={() => setApplication("idle")}>Annuler</button>
+          </div>
+        ) : (
+          <button className="btn btn-ghost" onClick={() => setApplication("confirmer")} disabled={application === "envoi"}>
+            {application === "envoi" ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Appliquer au projet
+          </button>
+        )}
+        {erreurApplication && <p style={{ color: "var(--clr-danger)", marginTop: 12 }}>{erreurApplication}</p>}
+      </div>
     </div>
   );
 }

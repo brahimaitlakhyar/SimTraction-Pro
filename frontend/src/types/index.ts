@@ -24,7 +24,22 @@ export interface Project {
   nb_circulations: number;
   nb_sst: number;
   nb_postes: number;
+  version: number;
+  dernier_u_min: number | null;
+  dernier_conforme: boolean | null;
 }
+
+/** Projet complet (format V1 / moteur) ; `_meta.version` sert de verrou optimiste. */
+export interface ProjetComplet {
+  id: string;
+  nom: string;
+  systeme: SystemType;
+  alimentation: { sst: Record<string, unknown>[]; postes: Record<string, unknown>[]; [k: string]: unknown };
+  _meta: { version: number; created_at: string | null; updated_at: string | null };
+  [k: string]: unknown;
+}
+
+export type SectionProjet = "informations" | "parametres" | "trace" | "materiel" | "trafic" | "sous_stations" | "postes" | "sites";
 
 export interface SimulationRequest {
   project_id: string;

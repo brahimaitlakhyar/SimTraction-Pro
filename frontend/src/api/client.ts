@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { DimDefauts, DimParametres, DimSortie, EtudeResultat, Material, Project, SimulationRequest, SimulationTask, TacheSuivie } from "../types";
+import type { DimDefauts, DimParametres, DimSortie, EtudeResultat, Material, Project, ProjetComplet, SectionProjet, SimulationRequest, SimulationTask, SystemType, TacheSuivie } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -10,7 +10,13 @@ export const api = axios.create({
 
 // Projects
 export const getProjects = () => api.get<Project[]>("/api/v1/projects/").then(r => r.data);
-export const getProject  = (id: string) => api.get(`/api/v1/projects/${encodeURIComponent(id)}`).then(r => r.data);
+export const getProject  = (id: string) => api.get<ProjetComplet>(`/api/v1/projects/${encodeURIComponent(id)}`).then(r => r.data);
+export const createProject = (req: { nom: string; systeme?: SystemType; copie_de?: string }) =>
+  api.post<ProjetComplet>("/api/v1/projects/", req).then(r => r.data);
+export const deleteProject = (id: string) => api.delete(`/api/v1/projects/${encodeURIComponent(id)}`);
+/** Remplace une section du projet ; 409 si `version` n'est plus la version courante. */
+export const updateSection = (id: string, section: SectionProjet, donnees: unknown, version: number) =>
+  api.put<ProjetComplet>(`/api/v1/projects/${encodeURIComponent(id)}/${section}`, { version, donnees }).then(r => r.data);
 
 // Simulation
 export const runSimulation = (req: SimulationRequest) => api.post<SimulationTask>("/api/v1/simulation/run", req).then(r => r.data);
