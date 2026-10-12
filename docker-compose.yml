@@ -1,0 +1,87 @@
+﻿version: '3.9'
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: simtraction_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: simtraction
+      POSTGRES_USER: simtraction
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-simtraction_secret}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simtraction"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (Queue & Cache) ────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: simtraction_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── FastAPI Backend ──────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: simtraction_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  # ── Celery Worker (calculs lourds) ───────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: simtraction_worker
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql+asyncpg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - redis
+      - db
+
+  # ── React Frontend (Vite build) ──────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: simtraction_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  uploads_data:

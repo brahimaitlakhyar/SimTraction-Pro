@@ -1,0 +1,58 @@
+# =============================================
+# SimTraction Pro - .gitignore
+# =============================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+!.env.example
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Database / uploads
+*.db
+*.sqlite3
+uploads/
+data/uploads/
+
+# OS
+*.bak
+*.tmp
