@@ -12,6 +12,7 @@ import math
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
+from .noyaux import resoudre_bande_complexe
 from .solver_dc import unique_positions, pos_index, limite_p
 
 
@@ -25,72 +26,22 @@ class BandC:
         self.re = np.zeros((n, self.W), dtype=np.float64)
         self.im = np.zeros((n, self.W), dtype=np.float64)
 
+    def copie(self) -> "BandC":
+        c = BandC.__new__(BandC)
+        c.n, c.w, c.W = self.n, self.w, self.W
+        c.re = self.re.copy()
+        c.im = self.im.copy()
+        return c
+
     def add(self, i: int, j: int, vr: float, vi: float):
         k = j - i + self.w
         self.re[i, k] += vr
         self.im[i, k] += vi
 
     def solve(self, br: np.ndarray, bi: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        n = self.n
-        w = self.w
-        W = self.W
-        R = self.re
-        I_mat = self.im
-        b_r = np.array(br, dtype=np.float64, copy=True)
-        b_i = np.array(bi, dtype=np.float64, copy=True)
-
-        for k in range(n):
-            pr = R[k, w]
-            pi = I_mat[k, w]
-            pd = pr * pr + pi * pi
-            if pd < 1e-28:
-                pr = 1e-14
-                R[k, w] = pr
-                pd = 1e-28
-
-            iend = min(n - 1, k + w)
-            for i in range(k + 1, iend + 1):
-                ik = k - i + w
-                ar = R[i, ik]
-                ai = I_mat[i, ik]
-                if ar == 0.0 and ai == 0.0:
-                    continue
-                fr = (ar * pr + ai * pi) / pd
-                fi = (ai * pr - ar * pi) / pd
-                R[i, ik] = fr
-                I_mat[i, ik] = fi
-
-                for j in range(k + 1, iend + 1):
-                    kj = j - k + w
-                    ij = j - i + w
-                    cr = R[k, kj]
-                    ci = I_mat[k, kj]
-                    R[i, ij] -= fr * cr - fi * ci
-                    I_mat[i, ij] -= fr * ci + fi * cr
-
-                b0r = b_r[k]
-                b0i = b_i[k]
-                b_r[i] -= fr * b0r - fi * b0i
-                b_i[i] -= fr * b0i + fi * b0r
-
-        for k in range(n - 1, -1, -1):
-            sr = b_r[k]
-            si = b_i[k]
-            jend = min(n - 1, k + w)
-            for j in range(k + 1, jend + 1):
-                kj2 = j - k + w
-                xr = b_r[j]
-                xi = b_i[j]
-                sr -= R[k, kj2] * xr - I_mat[k, kj2] * xi
-                si -= R[k, kj2] * xi + I_mat[k, kj2] * xr
-
-            dr = R[k, w]
-            di = I_mat[k, w]
-            dd = dr * dr + di * di
-            b_r[k] = (sr * dr + si * di) / dd
-            b_i[k] = (si * dr - sr * di) / dd
-
-        return b_r, b_i
+        # Noyau compilé (noyaux.py), opérations identiques à l'élimination d'origine
+        return resoudre_bande_complexe(self.re, self.im, np.asarray(br, dtype=np.float64),
+                                       np.asarray(bi, dtype=np.float64), self.n, self.w)
 
 
 def cinv(r: float, x: float) -> Tuple[float, float]:
@@ -195,95 +146,103 @@ def resoudre_ac(cfg: Dict[str, Any], charges: List[Dict[str, Any]], u_init: Opti
     vi = np.zeros(n, dtype=np.float64)
     it_count = 0
 
-    for it_count in range(30):
-        A = BandC(n, w)
-        br = np.zeros(n, dtype=np.float64)
-        bi = np.zeros(n, dtype=np.float64)
+    # Matrice nodale et sources des SST : indépendantes de l'itération (les trains
+    # n'interviennent que dans le second membre) → construites une fois par pas de temps.
+    A = BandC(n, w)
+    br = np.zeros(n, dtype=np.float64)
+    bi = np.zeros(n, dtype=np.float64)
 
-        def y2(a_node: int, b_node: int, yr: float, yi: float):
-            A.add(a_node, a_node, yr, yi)
-            A.add(b_node, b_node, yr, yi)
-            A.add(a_node, b_node, -yr, -yi)
-            A.add(b_node, a_node, -yr, -yi)
+    def y2(a_node: int, b_node: int, yr: float, yi: float):
+        A.add(a_node, a_node, yr, yi)
+        A.add(b_node, b_node, yr, yi)
+        A.add(a_node, b_node, -yr, -yi)
+        A.add(b_node, a_node, -yr, -yi)
 
-        # Ligne de contact
-        for i in range(m - 1):
-            dx = max(xs[i + 1] - xs[i], 1e-4)
-            Y = y_seg(dx)
+    # Ligne de contact
+    for i in range(m - 1):
+        dx = max(xs[i + 1] - xs[i], 1e-4)
+        Y = y_seg(dx)
+        for v_idx in range(nv):
+            if not deux:
+                y2(node(i, 1, v_idx, 0), node(i + 1, 0, v_idx, 0), Y[0][0], Y[0][1])
+            else:
+                a0 = node(i, 1, v_idx, 0)
+                a1 = node(i, 1, v_idx, 1)
+                b0 = node(i + 1, 0, v_idx, 0)
+                b1 = node(i + 1, 0, v_idx, 1)
+                i2_nodes = [[a0, b0], [a1, b1]]
+                for p_c in range(2):
+                    for q_c in range(2):
+                        yy = Y[p_c * 2 + q_c]
+                        A.add(i2_nodes[p_c][0], i2_nodes[q_c][0], yy[0], yy[1])
+                        A.add(i2_nodes[p_c][1], i2_nodes[q_c][1], yy[0], yy[1])
+                        A.add(i2_nodes[p_c][0], i2_nodes[q_c][1], -yy[0], -yy[1])
+                        A.add(i2_nodes[p_c][1], i2_nodes[q_c][0], -yy[0], -yy[1])
+
+    # Admittance de fuite à la terre
+    for i in range(n):
+        A.add(i, i, 1e-9, 0.0)
+
+    # Sous-stations
+    for s in all_sst:
+        if not s.get("actif"):
+            if s.get("ponte"):
+                kp0 = pos_index(xs, float(s["x"]))
+                for v0 in range(nv):
+                    for c0 in range(nc):
+                        y2(node(kp0, 0, v0, c0), node(kp0, 1, v0, c0), 1000.0, 0.0)
+            continue
+
+        k_node = pos_index(xs, float(s["x"]))
+        ys = cinv(float(s["zr"]), float(s["zx"]))
+        e_volts = float(s.get("e", 27500.0) or 27500.0)
+
+        for c_cond in range(nc):
+            bn = busn(k_node, c_cond)
+            e_source = (1.0 if c_cond == 0 else -1.0) * e_volts
+            A.add(bn, bn, ys[0], ys[1])
+            br[bn] += e_source * ys[0]
+            bi[bn] += e_source * ys[1]
             for v_idx in range(nv):
-                if not deux:
-                    y2(node(i, 1, v_idx, 0), node(i + 1, 0, v_idx, 0), Y[0][0], Y[0][1])
-                else:
-                    a0 = node(i, 1, v_idx, 0)
-                    a1 = node(i, 1, v_idx, 1)
-                    b0 = node(i + 1, 0, v_idx, 0)
-                    b1 = node(i + 1, 0, v_idx, 1)
-                    i2_nodes = [[a0, b0], [a1, b1]]
-                    for p_c in range(2):
-                        for q_c in range(2):
-                            yy = Y[p_c * 2 + q_c]
-                            A.add(i2_nodes[p_c][0], i2_nodes[q_c][0], yy[0], yy[1])
-                            A.add(i2_nodes[p_c][1], i2_nodes[q_c][1], yy[0], yy[1])
-                            A.add(i2_nodes[p_c][0], i2_nodes[q_c][1], -yy[0], -yy[1])
-                            A.add(i2_nodes[p_c][1], i2_nodes[q_c][0], -yy[0], -yy[1])
+                for sd in range(2):
+                    y2(bn, node(k_node, sd, v_idx, c_cond), 1000.0, 0.0)
 
-        # Admittance de fuite à la terre
-        for i in range(n):
-            A.add(i, i, 1e-9, 0.0)
+    # Postes
+    for pp in postes:
+        k_node = pos_index(xs, float(pp["x"]))
+        if pp.get("type") == "SP" and pp.get("ferme"):
+            for v_idx in range(nv):
+                for c_cond in range(nc):
+                    y2(node(k_node, 0, v_idx, c_cond), node(k_node, 1, v_idx, c_cond), 1000.0, 0.0)
 
-        # Sous-stations
-        for s in all_sst:
-            if not s.get("actif"):
-                if s.get("ponte"):
-                    kp0 = pos_index(xs, float(s["x"]))
-                    for v0 in range(nv):
-                        for c0 in range(nc):
-                            y2(node(kp0, 0, v0, c0), node(kp0, 1, v0, c0), 1000.0, 0.0)
-                continue
+        if pp.get("type") in ("SSP", "SP", "ATS"):
+            # Mise en parallèle des voies
+            num_sides = 2 if brk[k_node] else 1
+            for sd in range(num_sides):
+                for v2 in range(1, nv):
+                    for c2 in range(nc):
+                        y2(node(k_node, sd, 0, c2), node(k_node, sd, v2, c2), 1000.0, 0.0)
 
-            k_node = pos_index(xs, float(s["x"]))
-            ys = cinv(float(s["zr"]), float(s["zx"]))
-            e_volts = float(s.get("e", 27500.0) or 27500.0)
+        if deux and pp.get("at") is not False:
+            # Autotransformateurs : V_C + V_F ≈ 0
+            zat = tuple(cfg["zat"])
+            ya = cinv(zat[0], zat[1])
+            num_sides = 2 if brk[k_node] else 1
+            for sd in range(num_sides):
+                for v3 in range(nv):
+                    c_node = node(k_node, sd, v3, 0)
+                    f_node = node(k_node, sd, v3, 1)
+                    A.add(c_node, c_node, ya[0], ya[1])
+                    A.add(f_node, f_node, ya[0], ya[1])
+                    A.add(c_node, f_node, ya[0], ya[1])
+                    A.add(f_node, c_node, ya[0], ya[1])
 
-            for c_cond in range(nc):
-                bn = busn(k_node, c_cond)
-                e_source = (1.0 if c_cond == 0 else -1.0) * e_volts
-                A.add(bn, bn, ys[0], ys[1])
-                br[bn] += e_source * ys[0]
-                bi[bn] += e_source * ys[1]
-                for v_idx in range(nv):
-                    for sd in range(2):
-                        y2(bn, node(k_node, sd, v_idx, c_cond), 1000.0, 0.0)
+    A_base, br_base, bi_base = A, br, bi
 
-        # Postes
-        for pp in postes:
-            k_node = pos_index(xs, float(pp["x"]))
-            if pp.get("type") == "SP" and pp.get("ferme"):
-                for v_idx in range(nv):
-                    for c_cond in range(nc):
-                        y2(node(k_node, 0, v_idx, c_cond), node(k_node, 1, v_idx, c_cond), 1000.0, 0.0)
-
-            if pp.get("type") in ("SSP", "SP", "ATS"):
-                # Mise en parallèle des voies
-                num_sides = 2 if brk[k_node] else 1
-                for sd in range(num_sides):
-                    for v2 in range(1, nv):
-                        for c2 in range(nc):
-                            y2(node(k_node, sd, 0, c2), node(k_node, sd, v2, c2), 1000.0, 0.0)
-
-            if deux and pp.get("at") is not False:
-                # Autotransformateurs : V_C + V_F ≈ 0
-                zat = tuple(cfg["zat"])
-                ya = cinv(zat[0], zat[1])
-                num_sides = 2 if brk[k_node] else 1
-                for sd in range(num_sides):
-                    for v3 in range(nv):
-                        c_node = node(k_node, sd, v3, 0)
-                        f_node = node(k_node, sd, v3, 1)
-                        A.add(c_node, c_node, ya[0], ya[1])
-                        A.add(f_node, f_node, ya[0], ya[1])
-                        A.add(c_node, f_node, ya[0], ya[1])
-                        A.add(f_node, c_node, ya[0], ya[1])
+    for it_count in range(30):
+        A = A_base.copie()  # solve() factorise A sur place
+        br = br_base.copy()
+        bi = bi_base.copy()
 
         # Charges (trains)
         for c3, ch in enumerate(charges):

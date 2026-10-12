@@ -6,11 +6,53 @@ Modèle cinématique et marche des trains (intégration temporelle pas à pas).
 """
 
 import math
+import threading
+from collections import OrderedDict
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
+from .noyaux import enveloppe_retrograde
 from .train import Train
 from .track import Parcours, DS
+
+# Cache des parcours et enveloppes : les circulations d'un même engin, dans le même sens et avec
+# les mêmes arrêts (grille répétée, situations N-1…) partagent ces tableaux, en lecture seule.
+# Les clés utilisent l'identité des objets (tracé, engin) ; l'entrée garde une référence à ces
+# objets et la vérifie, ce qui empêche toute confusion après réutilisation d'un id.
+# Taille bornée en mémoire (LRU) et accès protégé (calculs simultanés de l'API).
+_CACHE_OCTETS_MAX = 256 * 1024 * 1024
+_cache: "OrderedDict[tuple, tuple]" = OrderedDict()
+_cache_octets = 0
+_cache_verrou = threading.Lock()
+
+
+def _taille(valeur) -> int:
+    if isinstance(valeur, Parcours):
+        return valeur.vlim.nbytes + valeur.pente.nbytes + valeur.rayon.nbytes + valeur.tunnel.nbytes
+    return sum(e.nbytes for e in valeur)
+
+
+def _cache_lire(cle: tuple, refs: tuple):
+    with _cache_verrou:
+        entree = _cache.get(cle)
+        if entree is not None and all(a is b for a, b in zip(entree[0], refs)):
+            _cache.move_to_end(cle)
+            return entree[1]
+    return None
+
+
+def _cache_ecrire(cle: tuple, refs: tuple, valeur):
+    global _cache_octets
+    taille = _taille(valeur)
+    with _cache_verrou:
+        ancien = _cache.pop(cle, None)
+        if ancien is not None:
+            _cache_octets -= ancien[2]
+        _cache[cle] = (refs, valeur, taille)
+        _cache_octets += taille
+        while _cache_octets > _CACHE_OCTETS_MAX and len(_cache) > 1:
+            _, (_, _, t) = _cache.popitem(last=False)
+            _cache_octets -= t
 
 
 class Marche:
@@ -24,7 +66,12 @@ class Marche:
             vmax = min(vmax, float(opts["vitesse_ligne"]))
 
         marge = float(opts.get("marge", 0.98) or 0.98)
-        self.p = Parcours(troncons, int(circ.get("sens", 1)), vmax, marge, train.longueur_m)
+        sens = int(circ.get("sens", 1))
+        cle_p = ("parcours", id(troncons), sens, vmax, marge, train.longueur_m)
+        self.p = _cache_lire(cle_p, (troncons,))
+        if self.p is None:
+            self.p = Parcours(troncons, sens, vmax, marge, train.longueur_m)
+            _cache_ecrire(cle_p, (troncons,), self.p)
 
         gares_list = self.p.gares()
         self.arrets: List[Tuple[float, float, str]] = []  # [(s_m, duree_s, nom_gare)]
@@ -37,7 +84,11 @@ class Marche:
                 self.arrets.append((g["s"], duree, g["nom"]))
 
         self.leg = 0
-        self.env = self._enveloppes()
+        cle_e = ("enveloppes", id(self.p), id(train), tuple(a[0] for a in self.arrets))
+        self.env = _cache_lire(cle_e, (self.p, train))
+        if self.env is None:
+            self.env = self._enveloppes()
+            _cache_ecrire(cle_e, (self.p, train), self.env)
         self.s = 0.0
         self.v = float(circ.get("v_initiale", 0.0) or 0.0) / 3.6  # m/s
         self.t = 0.0
@@ -63,12 +114,10 @@ class Marche:
                 idx_stop = self.p.idx(stop_s)
                 e[idx_stop:] = 0.0
 
-            # Intégration rétrograde
-            for i in range(n - 2, -1, -1):
-                v_next = e[i + 1]
-                lim = math.sqrt(v_next * v_next + 2.0 * self.bcap(v_next) * DS)
-                if e[i] > lim:
-                    e[i] = lim
+            # Intégration rétrograde (noyau compilé, identique à la boucle sur self.bcap)
+            tr = self.tr
+            enveloppe_retrograde(e, DS, float(tr.decel_service or 0.0), tr.f_frein, tr.p_frein_kw,
+                                 tr.davis_a, tr.davis_b, tr.davis_c, tr.masse_dyn_t)
             envs.append(e)
 
         return envs

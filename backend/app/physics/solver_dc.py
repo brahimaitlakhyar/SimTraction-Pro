@@ -9,7 +9,8 @@ Solveur électrique pour les réseaux de traction 3 kV continu (CC).
 import math
 from typing import List, Dict, Any, Optional
 import numpy as np
-from scipy import linalg
+
+from .noyaux import resoudre_bande_reelle
 
 
 class BandR:
@@ -21,41 +22,18 @@ class BandR:
         self.W = 2 * w + 1
         self.a = np.zeros((n, self.W), dtype=np.float64)
 
+    def copie(self) -> "BandR":
+        c = BandR.__new__(BandR)
+        c.n, c.w, c.W = self.n, self.w, self.W
+        c.a = self.a.copy()
+        return c
+
     def add(self, i: int, j: int, v: float):
         self.a[i, j - i + self.w] += v
 
     def solve(self, b: np.ndarray) -> np.ndarray:
-        n = self.n
-        w = self.w
-        W = self.W
-        a = self.a
-        b_res = np.array(b, dtype=np.float64, copy=True)
-
-        for k in range(n):
-            piv = a[k, w]
-            if abs(piv) < 1e-14:
-                piv = 1e-14
-                a[k, w] = 1e-14
-            iend = min(n - 1, k + w)
-            for i in range(k + 1, iend + 1):
-                ik = k - i + w
-                f = a[i, ik] / piv
-                if f == 0.0:
-                    continue
-                a[i, ik] = f
-                jend = min(n - 1, k + w)
-                for j in range(k + 1, jend + 1):
-                    a[i, j - i + w] -= f * a[k, j - k + w]
-                b_res[i] -= f * b_res[k]
-
-        for k in range(n - 1, -1, -1):
-            s = b_res[k]
-            jend2 = min(n - 1, k + w)
-            for j in range(k + 1, jend2 + 1):
-                s -= a[k, j - k + w] * b_res[j]
-            b_res[k] = s / a[k, w]
-
-        return b_res
+        # Noyau compilé (noyaux.py), opérations identiques à l'élimination d'origine
+        return resoudre_bande_reelle(self.a, np.asarray(b, dtype=np.float64), self.n, self.w)
 
 
 def unique_positions(points: List[float], tol: float = 1e-3) -> List[float]:
@@ -220,7 +198,10 @@ def resoudre_cc(cfg: Dict[str, Any], charges: List[Dict[str, Any]], u_init: Opti
             for v_idx in range(nv):
                 g_elem(bus(k_node), cat(k_node, v_idx), 1.0 / rf)
 
-        return A, g_elem
+        return A
+
+    # Partie de la matrice indépendante de l'état des diodes : construite une fois par pas de temps
+    A_base = build_system()
 
     # Boucle de point fixe (Newton / relaxation)
     maxit = 40
@@ -228,7 +209,14 @@ def resoudre_cc(cfg: Dict[str, Any], charges: List[Dict[str, Any]], u_init: Opti
     v_pot = np.zeros(n, dtype=np.float64)
 
     for it_count in range(maxit):
-        A, g_elem = build_system()
+        A = A_base.copie()  # solve() factorise A sur place
+
+        def g_elem(a_node: int, b_node: int, conductance: float):
+            A.add(a_node, a_node, conductance)
+            A.add(b_node, b_node, conductance)
+            A.add(a_node, b_node, -conductance)
+            A.add(b_node, a_node, -conductance)
+
         b_vec = np.zeros(n, dtype=np.float64)
 
         for j_sst, s in enumerate(active_sst):

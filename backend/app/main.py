@@ -3,13 +3,24 @@ SimTraction Pro - Backend FastAPI
 Point d'entrée principal de l'API REST.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health, materials, projects, references, simulation
 from app.core.config import get_settings
+from app.physics.noyaux import prechauffer
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    prechauffer()  # compile les noyaux Numba au démarrage plutôt qu'au premier calcul
+    yield
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="SimTraction Pro API",
     description="API REST pour la simulation et le dimensionnement des réseaux de traction ferroviaire",
     version="2.0.0",

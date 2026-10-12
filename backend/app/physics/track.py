@@ -5,9 +5,10 @@ Gestion du tracé ferroviaire, profil en long et discrétisation spatiale.
   avec prise en compte du dégagement de la queue du train.
 """
 
-from collections import deque
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
+
+from .noyaux import minimum_glissant
 
 DS = 2.0  # Pas spatial en mètres
 
@@ -88,35 +89,28 @@ class Parcours:
         n = int(np.ceil(s_cum / DS)) + 1
         self.n = n
 
-        vl = np.zeros(n, dtype=np.float64)
-        self.pente = np.zeros(n, dtype=np.float32)
-        self.rayon = np.zeros(n, dtype=np.float32)
-        self.tunnel = np.zeros(n, dtype=np.float32)
+        # Échantillonnage vectorisé : tronçon de chaque point i·DS (équivalent de l'avance
+        # « while x >= fin du tronçon j : j += 1 »), puis valeurs du tronçon.
+        fins = np.array([b[1] for b in self.b], dtype=np.float64)
+        x = np.arange(n, dtype=np.float64) * DS
+        j = np.minimum(np.searchsorted(fins, x, side="right"), len(self.b) - 1)
 
-        j = 0
-        for i in range(n):
-            x_m = i * DS
-            while j < len(self.b) - 1 and x_m >= self.b[j][1]:
-                j += 1
-            t = self.b[j][2]
-            limite = float(t.get("limite") or 0.0)
-            vl[i] = (min(v_max, limite) if limite > 0 else v_max) * marge
-            self.pente[i] = float(t.get("pente") or 0.0) * self.sens
-            self.rayon[i] = float(t.get("rayon") or 0.0)
-            self.tunnel[i] = float(t.get("tunnel") or 0.0)
+        segs = [b[2] for b in self.b]
+        lim_seg = [float(t.get("limite") or 0.0) for t in segs]
+        vl_seg = np.array([(min(v_max, lim) if lim > 0 else v_max) * marge for lim in lim_seg], dtype=np.float64)
+        pente_seg = np.array([float(t.get("pente") or 0.0) * self.sens for t in segs], dtype=np.float64)
+        rayon_seg = np.array([float(t.get("rayon") or 0.0) for t in segs], dtype=np.float64)
+        tunnel_seg = np.array([float(t.get("tunnel") or 0.0) for t in segs], dtype=np.float64)
 
+        vl = vl_seg[j]
+        self.pente = pente_seg[j].astype(np.float32)
+        self.rayon = rayon_seg[j].astype(np.float32)
+        self.tunnel = tunnel_seg[j].astype(np.float32)
+
+        # Dégagement de la queue du train : minimum glissant sur la longueur du train
         k = int(round(longueur_m / DS))
         if k > 0:
-            out = np.zeros(n, dtype=np.float64)
-            dq: deque = deque()
-            for i in range(n):
-                while dq and vl[dq[-1]] >= vl[i]:
-                    dq.pop()
-                dq.append(i)
-                if dq[0] < i - k:
-                    dq.popleft()
-                out[i] = vl[dq[0]]
-            vl = out
+            vl = minimum_glissant(vl, k)
 
         self.vlim = vl
 
