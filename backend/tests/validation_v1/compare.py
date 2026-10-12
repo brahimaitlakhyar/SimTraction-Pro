@@ -127,6 +127,62 @@ def valider(projet: str, dt: float = 5.0, depuis_csv: bool = True, v1: Optional[
     return v1, comparer(v1, env, R, A)
 
 
+def comparer_etude(V: Dict[str, Any], P: Dict[str, Any]) -> List[Ecart]:
+    """Compare l'étude complète (normale + N-1 + séries allégées) : V = worker V1, P = executer_etude."""
+    out: List[Ecart] = []
+
+    def chk(nom: str, a: Any, b: Any):
+        out.append((_ecart(a, b), nom, a, b))
+
+    chk("glob.u_min", V["A"]["glob"]["u_min"], P["A"]["glob"]["u_min"])
+    chk("conf.nb", len(V["conf"]), len(P["conf"]))
+    for i, (cv, cp) in enumerate(zip(V["conf"], P["conf"])):
+        chk(f"conf[{i}].valeur", cv["valeur"], cp["valeur"])
+        chk(f"conf[{i}].ok", cv["ok"], cp["ok"])
+
+    chk("n1.nb", len(V["n1"]), len(P["n1"]))
+    for nv, np_ in zip(V["n1"], P["n1"]):
+        for k in ["nom", "k", "u_min", "pk_u_min", "u_moy_zone_min", "charge_max", "charge_max_nom"]:
+            chk(f"{nv['nom']}.{k}", nv[k], np_[k])
+        for j, (a, b) in enumerate(zip(nv["charges"], np_["charges"])):
+            chk(f"{nv['nom']}.charges[{j}]", a, b)
+        for i, (cv, cp) in enumerate(zip(nv["conf"], np_["conf"])):
+            chk(f"{nv['nom']}.conf[{i}].ok", cv["ok"], cp["ok"])
+
+    sv, sp = V["series"], P["series"]
+    chk("series.nb_circ", len(sv["circ"]), len(sp["circ"]))
+    chk("series.t_sst", len(sv["t_sst"]), len(sp["t_sst"]))
+    for cv, cp in zip(sv["circ"], sp["circ"]):
+        for k in ["t", "pk", "u", "v"]:
+            chk(f"series.{cv['nom']}.{k}.n", len(cv[k]), len(cp[k]))
+            if cv[k]:
+                a, b = np.array(cv[k], float), np.array(cp[k][:len(cv[k])], float)
+                out.append(_ecart_serie(f"series.{cv['nom']}.{k}", a, b, max(np.abs(a).max(), 1.0), cv["t"]))
+    for s1, s2 in zip(sv["sst"], sp["sst"]):
+        a, b = np.array(s1["p"], float), np.array(s2["p"][:len(s1["p"])], float)
+        out.append((float(np.abs(a - b).max() / max(np.abs(a).max(), 1.0)) if len(a) else 0.0, f"series.sst.{s1['nom']}", None, None))
+
+    out.sort(key=lambda e: -e[0])
+    return out
+
+
+def valider_etude(projet: str, dt: float = 5.0) -> List[Ecart]:
+    """Exécute l'étude complète (worker V1 sous Node / executer_etude Python) et compare."""
+    from app.physics.etude import executer_etude
+
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("Node.js introuvable : nécessaire pour exécuter le moteur V1.")
+    with tempfile.TemporaryDirectory() as tmp:
+        sortie = os.path.join(tmp, "v1.json")
+        subprocess.run([node, os.path.join(ICI, "v1_run.js"), DOSSIER_V1, projet, str(dt), sortie, "etude"],
+                       check=True, capture_output=True, text=True, encoding="utf-8")
+        with open(sortie, encoding="utf-8") as f:
+            V = json.load(f)["etude"]
+    env = SimulationEnv(charger_projet_v1(os.path.join(DOSSIER_V1, "BDD", "projets", projet)))
+    return comparer_etude(V, executer_etude(env, {"dt": dt, "couplage": True, "n1": True}))
+
+
 def main():
     projet = sys.argv[1]
     dt = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
@@ -139,6 +195,13 @@ def main():
         print(f"{len(ecarts)} grandeurs, {len(ko)} au-delà de 0,05 % ; écart max {ecarts[0][0] * 100:.3g} %")
         for e, nom, a, b in ecarts[:10]:
             print(f"  {'KO' if e > TOLERANCE else 'ok'} {e * 100:10.3g} %  {nom:36s} V1={a}  Py={b}")
+
+    ecarts = valider_etude(projet, dt)
+    ko = [e for e in ecarts if e[0] > TOLERANCE]
+    print(f"\n=== {projet} dt={dt:g}s – Étude complète (normale + N-1 + séries) ===")
+    print(f"{len(ecarts)} grandeurs, {len(ko)} au-delà de 0,05 % ; écart max {ecarts[0][0] * 100:.3g} %")
+    for e, nom, a, b in ecarts[:10]:
+        print(f"  {'KO' if e > TOLERANCE else 'ok'} {e * 100:10.3g} %  {nom:36s} V1={a}  Py={b}")
 
 
 if __name__ == "__main__":

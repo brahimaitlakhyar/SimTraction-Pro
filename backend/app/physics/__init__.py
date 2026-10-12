@@ -10,6 +10,7 @@ from .solver_dc import resoudre_cc, limite_p
 from .solver_ac import resoudre_ac
 from .simulation import SimulationEnv, build_network_configuration, build_configuration_n1, simuler, analyser, verifications_normatives
 from .dimensioning import dimensionner, comparer_variantes
+from .etude import executer_etude, series_interface, json_sur
 
 __all__ = [
     "Train",
@@ -29,6 +30,9 @@ __all__ = [
     "verifications_normatives",
     "dimensionner",
     "comparer_variantes",
+    "executer_etude",
+    "series_interface",
+    "json_sur",
     "merge_standards",
     "get_system_family",
     "DEFAULT_STANDARDS",

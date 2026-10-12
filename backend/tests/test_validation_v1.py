@@ -9,7 +9,7 @@ import shutil
 
 import pytest
 
-from tests.validation_v1.compare import TOLERANCE, valider
+from tests.validation_v1.compare import TOLERANCE, valider, valider_etude
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js requis pour le moteur V1")
 
@@ -33,18 +33,29 @@ PROJETS_AC = [
 ]
 
 
-def _verifier(projet: str):
-    _, ecarts = valider(projet, dt=5.0)
+def _assert_ecarts(ecarts):
     ko = [e for e in ecarts if e[0] > TOLERANCE]
     assert not ko, "\n".join(f"{nom}: V1={a} Py={b} ({e * 100:.3g} %)" for e, nom, a, b in ko[:10])
 
 
 @pytest.mark.parametrize("projet", PROJETS_CC)
 def test_cc3000_identique_a_v1(projet):
-    _verifier(projet)
+    _assert_ecarts(valider(projet, dt=5.0)[1])
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("projet", PROJETS_AC)
 def test_ac25_identique_a_v1(projet):
-    _verifier(projet)
+    _assert_ecarts(valider(projet, dt=5.0)[1])
+
+
+# Étude complète (normale + N-1 + séries) face au worker V1
+@pytest.mark.parametrize("projet", ["Aourdou", "Casa_Voyageurs_2_Bouskoura_2", "Casa_Port_2_Casa_Voyageurs_2"])
+def test_etude_n1_cc3000_identique_a_v1(projet):
+    _assert_ecarts(valider_etude(projet, dt=5.0))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("projet", PROJETS_AC)
+def test_etude_n1_ac25_identique_a_v1(projet):
+    _assert_ecarts(valider_etude(projet, dt=5.0))

@@ -1,7 +1,9 @@
 // Exécute le moteur JavaScript de SimTraction V1 sous Node, sur un projet de la BDD V1.
-// Usage : node v1_run.js <dossier_V1> <projet> <dt> <sortie.json>
+// Usage : node v1_run.js <dossier_V1> <projet> <dt> <sortie.json> [simulation|etude]
+//   simulation (défaut) : situation normale, avec séries brutes
+//   etude               : commande « simuler » du worker V1 (normale + N-1 + séries allégées)
 const fs = require("fs"), path = require("path"), vm = require("vm");
-const [V1, projet, dtArg, out] = process.argv.slice(2);
+const [V1, projet, dtArg, out, mode = "simulation"] = process.argv.slice(2);
 const html = fs.readFileSync(path.join(V1, "SimTraction.html"), "utf8");
 
 function bloc(ouverture) {           // contenu d'un <script> repéré par sa première ligne
@@ -17,7 +19,7 @@ function charger(src) {              // contexte isolé sans `module` → les sc
   return ctx;
 }
 
-const ST = charger(bloc('<script id="engine">')).ST;
+const ctxMoteur = charger(bloc('<script id="engine">')), ST = ctxMoteur.ST;
 const B = charger(bloc("<script>/* ==========================================================================\n   SimTraction — base de données")).BDD;
 
 const lire = (f, cols) => fs.existsSync(f) ? B.depuisCsv(fs.readFileSync(f, "utf8"), cols) : null;
@@ -39,6 +41,20 @@ const NORMES_BD = {};
 const projetCalc = Object.assign({}, P, { normesBase: NORMES_BD });
 
 const dt = +dtArg || 5, t0 = Date.now();
+const json = o => JSON.stringify(o, (k, v) => (typeof v === "number" && !isFinite(v)) ? String(v) : v);
+
+if (mode === "etude") {
+  vm.runInContext(bloc('<script type="text/plain" id="worker-src">'), ctxMoteur);
+  let fin = null;
+  ctxMoteur.STtraiter({ cmd: "simuler", projet: projetCalc, opts: { dt, couplage: true, n1: true } }, m => {
+    if (m.type === "fin" || m.type === "erreur") fin = m;
+  });
+  if (!fin || fin.type === "erreur") throw new Error("Échec V1 : " + (fin && fin.message));
+  fs.writeFileSync(out, json({ projet: P, etude: fin }));
+  console.log(`V1 étude ${projet} dt=${dt}s : ${fin.n1.length} cas N-1, ${(Date.now() - t0) / 1000}s`);
+  return;
+}
+
 const E = ST.preparer(projetCalc);
 const cfg = ST.configuration(E);
 const R = ST.simuler(E, { cfg, couplage: true, dt });
@@ -46,11 +62,11 @@ const A = ST.analyser(E, R);
 const conf = ST.verifications(E, A, "normale");
 
 const arr = a => Array.from(a);
-fs.writeFileSync(out, JSON.stringify({
+fs.writeFileSync(out, json({
   projet: P, normes: E.normes, duree_calcul: (Date.now() - t0) / 1000,
   nb_circ: E.circ.length, avert: E.avert,
   A: { glob: A.glob, sst: A.sst, trains: A.trains, zones: A.zones }, conf,
   R: { nt: R.nt, ns: R.ns, sst_p: arr(R.sst_p), sst_u: arr(R.sst_u), pertes_ligne: arr(R.pertes_ligne),
        circ: R.circ.map(c => ({ id: c.id, nom: c.nom, t: c.t, pk: c.pk, v: c.v, pdem: c.pdem, u: c.u, p: c.p })) },
-}, (k, v) => (typeof v === "number" && !isFinite(v)) ? String(v) : v));
+}));
 console.log(`V1 ${projet} dt=${dt}s : ${E.circ.length} circulations, u_min=${A.glob.u_min.toFixed(1)} V, ${(Date.now() - t0) / 1000}s`);
