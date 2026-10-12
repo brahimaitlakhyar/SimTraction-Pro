@@ -14,7 +14,7 @@ _tasks: Dict[str, Dict] = {}
 
 class SimulationRequest(BaseModel):
     project_id: str
-    system_type: str = "AC25kV_2x25"  # DC1500, DC3000, AC25kV_1x25, AC25kV_2x25
+    system_type: str = "AC25kV_2x25"  # DC3000, AC25kV_1x25, AC25kV_2x25
     peak_hour_trains: int = 8
     headway_min: float = 7.5
     apply_n1: bool = True

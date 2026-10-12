@@ -2,7 +2,7 @@
 
 **Plateforme professionnelle d'étude de puissance ferroviaire**
 
-SimTraction Pro est un logiciel full-stack de simulation et dimensionnement des réseaux électriques de traction ferroviaire (DC 1,5 kV / 3 kV, AC 25 kV 1×25, AC 25 kV 2×25 BT/AT), compatible avec les normes EN 50388, EN 50633, NF EN 50163 et IEC 60850.
+SimTraction Pro est un logiciel full-stack de simulation et dimensionnement des réseaux électriques de traction ferroviaire (DC 3 kV, AC 25 kV 1×25, AC 25 kV 2×25 BT/AT), compatible avec les normes EN 50388, EN 50633, NF EN 50163 et IEC 60850.
 
 ---
 
@@ -97,7 +97,7 @@ Copier .env.example en .env et configurer :
 | Couche | Technologie |
 |---|---|
 | Backend | Python 3.12, FastAPI, SQLAlchemy, Celery |
-| Frontend | React 18, TypeScript, Vite, Recharts |
+| Frontend | React 19, TypeScript, Vite, Apache ECharts |
 | Base de données | PostgreSQL 16 / SQLite (dev) |
 | Cache/Queue | Redis 7 |
 | Reverse Proxy | Nginx |

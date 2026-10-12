@@ -8,7 +8,6 @@ const SAMPLE: Material[] = [
   { id: "Z2M",      name: "Z 2M",                   type: "DMU",        v_max_kmh: 160, p_max_kw: 1860, system: "diesel" },
   { id: "E1400",    name: "E1400 (Prima II)",        type: "Locomotive", v_max_kmh: 220, p_max_kw: 5500, system: "AC25kV" },
   { id: "Al_Boraq", name: "Al Boraq (TGV M)",        type: "TGV",        v_max_kmh: 320, p_max_kw: 9280, system: "AC25kV" },
-  { id: "Z1300",    name: "Z 1300 (Bombardier)",     type: "EMU",        v_max_kmh: 120, p_max_kw: 2800, system: "DC1500" },
   { id: "IORE",     name: "IORE (Alstom cargo)",     type: "Locomotive", v_max_kmh: 100, p_max_kw: 10800, system: "DC3000" },
 ];
 

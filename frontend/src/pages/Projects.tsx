@@ -4,7 +4,6 @@ import { getProjects } from "../api/client";
 import type { Project } from "../types";
 
 const SYSTEM_LABELS: Record<string, string> = {
-  DC1500: "DC 1,5 kV",
   DC3000: "DC 3 kV",
   AC25kV_1x25: "AC 25 kV 1×25",
   AC25kV_2x25: "AC 25 kV 2×25",
@@ -14,7 +13,7 @@ const SAMPLE_PROJECTS: Project[] = [
   { id: "ain_sebaa_kenitra", name: "Ain Sébaâ – Kénitra", system: "AC25kV_2x25", status: "ready", length_km: 140, substations: 3 },
   { id: "casa_rabat_tgv",    name: "Casa – Rabat (TGV)",  system: "AC25kV_2x25", status: "done",  length_km: 90,  substations: 2 },
   { id: "marrakech_agadir",  name: "Marrakech – Agadir",  system: "AC25kV_1x25", status: "ready", length_km: 230, substations: 5 },
-  { id: "fes_meknes",        name: "Fès – Meknès",         system: "DC1500",      status: "ready", length_km: 60,  substations: 3 },
+  { id: "fes_meknes",        name: "Fès – Meknès",         system: "DC3000",      status: "ready", length_km: 60,  substations: 3 },
   { id: "tangier_port",      name: "Port de Tanger – Gare",system: "AC25kV_1x25", status: "done",  length_km: 45,  substations: 1 },
 ];
 

@@ -2,7 +2,7 @@
 // SimTraction Pro – TypeScript type definitions
 // ──────────────────────────────────────────────────────
 
-export type SystemType = "DC1500" | "DC3000" | "AC25kV_1x25" | "AC25kV_2x25";
+export type SystemType = "DC3000" | "AC25kV_1x25" | "AC25kV_2x25";
 
 export interface Project {
   id: string;

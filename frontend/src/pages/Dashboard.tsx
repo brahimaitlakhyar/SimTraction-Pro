@@ -1,18 +1,16 @@
-import {
-  AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from "recharts";
+import type { EChartsOption } from "echarts";
 import {
   Zap, TrendingUp, Activity,
   CheckCircle, Train, Cpu, BarChart2
 } from "lucide-react";
+import EChart from "../components/EChart";
+import { CHART_COLORS as C, styledAxis } from "../components/chartTheme";
 
 // ── Mock data ─────────────────────────────────────────────────────
 const voltageProfile = Array.from({ length: 20 }, (_, i) => ({
   km: i * 7,
-  "V nominal": 25,
-  "V min (N)": 19 + Math.random() * 3,
-  "V min (N-1)": 17 + Math.random() * 2.5,
+  vMinN: 19 + Math.random() * 3,
+  vMinN1: 17 + Math.random() * 2.5,
 }));
 
 const currentData = Array.from({ length: 24 }, (_, i) => ({
@@ -22,10 +20,54 @@ const currentData = Array.from({ length: 24 }, (_, i) => ({
 }));
 
 const energyData = [
-  { name: "Traction", value: 14.7, fill: "#3b82f6" },
-  { name: "Récupérée", value: 3.2,  fill: "#10b981" },
-  { name: "Pertes",   value: 1.4,  fill: "#f59e0b" },
+  { name: "Traction", value: 14.7, fill: C.primary },
+  { name: "Récupérée", value: 3.2,  fill: C.accent },
+  { name: "Pertes",   value: 1.4,  fill: C.warn },
 ];
+
+// ── Chart options ─────────────────────────────────────────────────
+const areaGradient = (color: string, opacity: number) => ({
+  type: "linear" as const, x: 0, y: 0, x2: 0, y2: 1,
+  colorStops: [
+    { offset: 0, color: color + Math.round(opacity * 255).toString(16).padStart(2, "0") },
+    { offset: 1, color: color + "00" },
+  ],
+});
+
+const voltageOption: EChartsOption = {
+  xAxis: styledAxis({ type: "value", min: 0, max: 133, axisLabel: { formatter: "{value} km" } }),
+  yAxis: styledAxis({ type: "value", min: 15, max: 27, axisLabel: { formatter: "{value} kV" } }),
+  series: [
+    { name: "V nominal", type: "line", showSymbol: false, data: voltageProfile.map(d => [d.km, 25]),
+      lineStyle: { color: C.muted, type: "dashed", width: 1 }, itemStyle: { color: C.muted } },
+    { name: "V min (N)", type: "line", smooth: true, showSymbol: false, data: voltageProfile.map(d => [d.km, +d.vMinN.toFixed(2)]),
+      lineStyle: { color: C.primary, width: 2 }, itemStyle: { color: C.primary }, areaStyle: { color: areaGradient(C.primary, 0.3) } },
+    { name: "V min (N-1)", type: "line", smooth: true, showSymbol: false, data: voltageProfile.map(d => [d.km, +d.vMinN1.toFixed(2)]),
+      lineStyle: { color: C.danger, width: 2 }, itemStyle: { color: C.danger }, areaStyle: { color: areaGradient(C.danger, 0.2) } },
+  ],
+};
+
+const currentOption: EChartsOption = {
+  xAxis: styledAxis({ type: "category", data: currentData.map(d => d.h) }),
+  yAxis: styledAxis({ type: "value", axisLabel: { formatter: "{value} A" } }),
+  series: [
+    { name: "I SST (A)", type: "line", smooth: true, showSymbol: false, data: currentData.map(d => Math.round(d.current)),
+      lineStyle: { color: C.accent, width: 2 }, itemStyle: { color: C.accent } },
+    { name: "Limite", type: "line", showSymbol: false, data: currentData.map(d => d.limit),
+      lineStyle: { color: C.danger, width: 1, type: "dashed" }, itemStyle: { color: C.danger } },
+  ],
+};
+
+const energyOption: EChartsOption = {
+  legend: { show: false },
+  xAxis: styledAxis({ type: "category", data: energyData.map(e => e.name) }),
+  yAxis: styledAxis({ type: "value", axisLabel: { formatter: "{value} MWh" } }),
+  grid: { left: 64, right: 16, top: 16, bottom: 28 },
+  series: [{
+    type: "bar", barMaxWidth: 64,
+    data: energyData.map(e => ({ value: e.value, itemStyle: { color: e.fill, borderRadius: [6, 6, 0, 0] } })),
+  }],
+};
 
 // ── KPI data ─────────────────────────────────────────────────────
 const kpis = [
@@ -65,62 +107,19 @@ export default function Dashboard() {
         {/* Voltage Profile */}
         <div className="card">
           <div className="card-title"><Zap size={16} style={{ color: "var(--clr-primary)" }} /> Profil de tension en ligne</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={voltageProfile} margin={{ left: -10, right: 10 }}>
-              <defs>
-                <linearGradient id="gN" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gN1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="km" tick={{ fill: "#64748b", fontSize: 11 }} unit=" km" />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} domain={[15, 27]} unit=" kV" />
-              <Tooltip contentStyle={{ background: "#1a2235", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, color: "#f1f5f9" }} />
-              <Legend wrapperStyle={{ fontSize: 12, color: "#64748b" }} />
-              <Area type="monotone" dataKey="V nominal" stroke="#64748b" fill="transparent" strokeDasharray="4 4" dot={false} />
-              <Area type="monotone" dataKey="V min (N)"  stroke="#3b82f6" fill="url(#gN)"  strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="V min (N-1)" stroke="#ef4444" fill="url(#gN1)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <EChart option={voltageOption} />
         </div>
 
         {/* Current over time */}
         <div className="card">
           <div className="card-title"><Activity size={16} style={{ color: "var(--clr-accent)" }} /> Courant SST sur 24h</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={currentData} margin={{ left: -10, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="h" tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} unit=" A" />
-              <Tooltip contentStyle={{ background: "#1a2235", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, color: "#f1f5f9" }} />
-              <Legend wrapperStyle={{ fontSize: 12, color: "#64748b" }} />
-              <Line type="monotone" dataKey="current" stroke="#10b981" strokeWidth={2} dot={false} name="I SST (A)" />
-              <Line type="monotone" dataKey="limit"   stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Limite" />
-            </LineChart>
-          </ResponsiveContainer>
+          <EChart option={currentOption} />
         </div>
 
         {/* Energy balance */}
         <div className="card">
           <div className="card-title"><BarChart2 size={16} style={{ color: "var(--clr-warn)" }} /> Bilan énergétique (MWh)</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={energyData} margin={{ left: -10, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} unit=" MWh" />
-              <Tooltip contentStyle={{ background: "#1a2235", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, color: "#f1f5f9" }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {energyData.map((e, i) => (
-                  <rect key={i} fill={e.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <EChart option={energyOption} />
         </div>
 
         {/* Normative summary */}

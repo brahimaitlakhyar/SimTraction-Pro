@@ -4,7 +4,6 @@ import { runSimulation, getSimStatus } from "../api/client";
 import type { SimulationResult, SystemType } from "../types";
 
 const SYSTEMS: { value: SystemType; label: string }[] = [
-  { value: "DC1500",      label: "DC 1 500 V" },
   { value: "DC3000",      label: "DC 3 000 V" },
   { value: "AC25kV_1x25", label: "AC 25 kV – 1×25 (simple fil)" },
   { value: "AC25kV_2x25", label: "AC 25 kV – 2×25 BT/AT" },
@@ -41,7 +40,7 @@ export default function Simulation() {
             setStatus("error");
             clearInterval(pollRef.current!);
           }
-        } catch (_) { /* ignore transient errors */ }
+        } catch { /* ignore transient errors */ }
       }, 600);
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
