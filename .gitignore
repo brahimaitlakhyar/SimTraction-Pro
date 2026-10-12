@@ -49,6 +49,8 @@ docker-compose.override.yml
 
 # Database / uploads
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 uploads/
 data/uploads/

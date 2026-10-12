@@ -20,6 +20,20 @@ class ProjetResume(BaseModel):
     nb_circulations: int
     nb_sst: int
     nb_postes: int
+    version: int = 1
+    dernier_u_min: Optional[float] = None
+    dernier_conforme: Optional[bool] = None
+
+
+class ProjetCreation(BaseModel):
+    nom: str = Field(..., min_length=1, max_length=200)
+    systeme: Systeme = "cc3000"
+    copie_de: Optional[str] = Field(None, description="Identifiant du projet à dupliquer (variante)")
+
+
+class SectionModification(BaseModel):
+    version: Optional[int] = Field(None, description="Version lue (verrou optimiste) ; omise : pas de contrôle")
+    donnees: Any
 
 
 class Alimentation(BaseModel):
@@ -92,4 +106,4 @@ class SiteHT(BaseModel):
     remarque: str
 
 
-__all__ = ["Systeme", "ProjetResume", "Alimentation", "SimulationRequest", "DimensionnementRequest", "TacheEtat", "Materiel", "Norme", "SiteHT", "List"]
+__all__ = ["Systeme", "ProjetResume", "ProjetCreation", "SectionModification", "Alimentation", "SimulationRequest", "DimensionnementRequest", "TacheEtat", "Materiel", "Norme", "SiteHT", "List"]

@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter
 
 from app.schemas import Norme, SiteHT
-from app.services.bdd_v1 import lister_normes, lister_sites_ht
+from app.services.projets import lister_normes, lister_sites_ht
 
 router = APIRouter()
 

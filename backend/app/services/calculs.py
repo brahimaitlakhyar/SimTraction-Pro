@@ -1,9 +1,10 @@
 """
 Exécution des calculs en tâche de fond : étude (normale + N-1), dimensionnement, comparaison de variantes.
-Implémentation en mémoire (pool de threads) en attendant la file Celery + Redis (plan, phase 3.2) :
-les tâches sont perdues au redémarrage du serveur.
+Suivi en mémoire (pool de threads) en attendant la file Celery + Redis (plan, phase 3.2) ; chaque calcul
+terminé est enregistré en base (historique) et reste consultable après un redémarrage du serveur.
 """
 
+import logging
 import threading
 import time
 import traceback
@@ -14,7 +15,10 @@ from typing import Any, Callable, Dict, List, Optional
 from app.core.config import get_settings
 from app.physics import SimulationEnv, executer_etude, json_sur
 from app.physics.dimensioning import comparer_variantes, dimensionner, liste_variantes, parametres_dimensionnement
-from app.services.bdd_v1 import lire_reglages, projet_pour_calcul
+from app.services import projets
+from app.services.projets import lire_reglages, projet_pour_calcul
+
+log = logging.getLogger("simtraction")
 
 _executor = ThreadPoolExecutor(max_workers=get_settings().simulation_workers, thread_name_prefix="calcul")
 _taches: Dict[str, Dict[str, Any]] = {}
@@ -76,9 +80,32 @@ def _executer(task_id: str, type_: str, project_id: str, opts: Dict[str, Any]):
         res = _TYPES[type_](project_id, opts,
                             lambda f, txt: _maj(task_id, progress=round(100 * f, 1), message=txt),
                             lambda ligne: _journal(task_id, ligne))
-        _maj(task_id, status="done", progress=100.0, message="Terminé", result=json_sur(res), finished_at=time.time())
+        res = json_sur(res)
+        resume = _resume(type_, opts, res)
+        _maj(task_id, status="done", progress=100.0, message="Terminé", result=res, finished_at=time.time(), **resume)
     except Exception as e:  # erreur métier ou bug : renvoyée à l'interface
         _maj(task_id, status="error", error=str(e), detail=traceback.format_exc(limit=5), finished_at=time.time())
+    _archiver(task_id)
+
+
+def _resume(type_: str, opts: Dict[str, Any], res: Dict[str, Any]) -> Dict[str, Any]:
+    """Tension minimale et conformité (situation normale) d'une étude, comme _dernier en V1."""
+    if type_ != "etude":
+        return {}
+    conforme = all(c.get("ok") or c.get("indicatif") for c in res.get("conf") or [])
+    return {"u_min": (res.get("A") or {}).get("glob", {}).get("u_min"), "conforme": conforme}
+
+
+def _archiver(task_id: str):
+    """Enregistre le calcul terminé en base ; met à jour le dernier calcul du projet."""
+    with _verrou:
+        t = dict(_taches[task_id])
+    try:
+        projets.enregistrer_calcul(t)
+        if t["type"] == "etude" and t["status"] == "done" and not t["opts"].get("alimentation"):
+            projets.enregistrer_dernier_calcul(t["project_id"], t.get("u_min"), t.get("conforme"))
+    except Exception:  # l'historique ne doit pas faire échouer le calcul
+        log.exception("Enregistrement du calcul %s impossible", task_id)
 
 
 def _purger():
@@ -112,16 +139,17 @@ def etat(task_id: str) -> Optional[Dict[str, Any]]:
     """État d'une tâche sans le résultat (léger, pour le suivi de progression)."""
     with _verrou:
         t = _taches.get(task_id)
-        if t is None:
-            return None
-        out = {k: v for k, v in t.items() if k not in ("result", "detail")}
-        out["journal"] = list(t["journal"])
-        return out
+        if t is not None:
+            out = {k: v for k, v in t.items() if k not in ("result", "detail")}
+            out["journal"] = list(t["journal"])
+            return out
+    return projets.lire_calcul(task_id, avec_resultat=False)
 
 
 def resultat(task_id: str) -> Optional[Dict[str, Any]]:
     with _verrou:
-        return _taches.get(task_id)
+        t = _taches.get(task_id)
+    return t if t is not None else projets.lire_calcul(task_id)
 
 
 def parametres(project_id: str) -> Dict[str, Any]:

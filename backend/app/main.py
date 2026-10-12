@@ -10,11 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import dimensioning, health, materials, projects, references, simulation
 from app.core.config import get_settings
+from app.db.migrations import initialiser_base
 from app.physics.noyaux import prechauffer
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    initialiser_base()  # schéma à jour (Alembic) ; import de la base V1 au premier démarrage
     prechauffer()  # compile les noyaux Numba au démarrage plutôt qu'au premier calcul
     yield
 

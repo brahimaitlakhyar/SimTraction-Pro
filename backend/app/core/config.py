@@ -14,8 +14,11 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
-    # Base de données V1 (dossier BDD en CSV), source des projets tant que PostgreSQL n'est pas branché
+    # Base de données : PostgreSQL en production (postgresql+psycopg://…), SQLite par défaut en développement
+    database_url: str = f"sqlite:///{(RACINE_DEPOT / 'backend' / 'simtraction.db').as_posix()}"
+    # Base V1 (dossier BDD en CSV) : importée automatiquement au premier démarrage si la base est vide
     v1_bdd_dir: Path = RACINE_DEPOT / "SimTraction_V1" / "BDD"
+    auto_import_v1: bool = True
     # Nombre de simulations exécutées en parallèle par le serveur
     simulation_workers: int = 2
 

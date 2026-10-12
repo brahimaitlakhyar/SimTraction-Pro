@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas import DimensionnementRequest, TacheEtat
 from app.services import calculs
-from app.services.bdd_v1 import ProjetIntrouvable
+from app.services.projets import ProjetIntrouvable
 
 router = APIRouter()
 

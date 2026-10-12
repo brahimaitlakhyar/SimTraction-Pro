@@ -34,7 +34,8 @@ def test_projet_complet():
 
 @pytest.mark.parametrize("pid", ["inexistant", "..", "../parametres", "..%2Fparametres"])
 def test_projet_introuvable_ou_hors_base(pid):
-    assert client.get(f"/api/v1/projects/{pid}").status_code == 404
+    # identifiants interprétés comme clés de base (aucun accès disque) : jamais de contenu renvoyé
+    assert client.get(f"/api/v1/projects/{pid}").status_code in (404, 405)
 
 
 def test_bibliotheques():

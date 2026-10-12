@@ -37,7 +37,7 @@ services:
     container_name: simtraction_backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
+      DATABASE_URL: postgresql+psycopg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
     command: celery -A app.celery_app worker --loglevel=info --concurrency=4
     environment:
-      DATABASE_URL: postgresql+asyncpg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
+      DATABASE_URL: postgresql+psycopg://simtraction:${DB_PASSWORD:-simtraction_secret}@db/simtraction
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
     volumes:
