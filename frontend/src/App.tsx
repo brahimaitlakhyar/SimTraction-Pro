@@ -56,12 +56,18 @@ function PlaceholderPage({ title }: { title: string }) {
 
 export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
+  const [projetSimule, setProjetSimule] = useState<string | undefined>();
+
+  const simulerProjet = (id: string) => {
+    setProjetSimule(id);
+    setPage("simulation");
+  };
 
   const renderPage = () => {
     switch (page) {
       case "dashboard":   return <Dashboard />;
-      case "simulation":  return <Simulation />;
-      case "projects":    return <Projects />;
+      case "simulation":  return <Simulation key={projetSimule} projectId={projetSimule} />;
+      case "projects":    return <Projects onSimuler={simulerProjet} />;
       case "materials":   return <Materials />;
       default:            return <PlaceholderPage title={page.charAt(0).toUpperCase() + page.slice(1)} />;
     }

@@ -378,3 +378,7 @@ table.data-table {
   .main-content { padding: var(--sp-md); }
   .charts-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Rotation (icônes de chargement) ───────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
