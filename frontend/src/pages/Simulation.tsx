@@ -4,8 +4,8 @@ import { Play, Loader2, CheckCircle2, AlertTriangle, Zap, ShieldCheck, Activity 
 import { getProjects, runSimulation, getSimStatus, getSimResult, messageErreur } from "../api/client";
 import { SYSTEM_LABELS, type Conformite, type EtudeResultat, type Project, type SimulationRequest } from "../types";
 import EChart from "../components/EChart";
-import { CHART_COLORS as C, styledAxis } from "../components/chartTheme";
-import { fmt, fmtU } from "../utils/format";
+import { CHART_COLORS as C, styledAxis, ZOOM_INTERIEUR } from "../components/chartTheme";
+import { fmt, fmtE, fmtU } from "../utils/format";
 
 type Etat = "idle" | "running" | "done" | "error";
 
@@ -94,12 +94,13 @@ export default function Simulation({ projectId }: Props) {
         <p>Situation normale et situations dégradées N-1, vérification EN 50163 / EN 50388-1</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0, 1fr)", gap: "var(--sp-xl)", alignItems: "start" }}>
+      <div className="sim-layout">
         {/* Configuration */}
-        <div className="card" style={{ position: "sticky", top: "var(--sp-xl)" }}>
+        <div className="card sim-config">
           <div className="card-title"><Zap size={16} /> Paramètres de simulation</div>
           <hr className="divider" />
 
+          <div className="sim-config-champs">
           <div className="form-group">
             <label className="form-label">Projet</label>
             <select className="form-input" value={form.project_id}
@@ -137,6 +138,7 @@ export default function Simulation({ projectId }: Props) {
                 onChange={e => setForm(f => ({ ...f, couplage: e.target.checked }))} />
               Effort des engins fonction de la tension réelle
             </label>
+          </div>
           </div>
 
           <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}
@@ -196,7 +198,7 @@ function Resultats({ r }: { r: EtudeResultat }) {
     grid: { left: 56, right: 24, top: 36, bottom: 48 },
     xAxis: styledAxis({ type: "value", name: "PK (km)", nameLocation: "middle", nameGap: 28, scale: true }),
     yAxis: styledAxis({ type: "value", name: uUnit, scale: true }),
-    dataZoom: [{ type: "inside" }],
+    dataZoom: [ZOOM_INTERIEUR],
     series: r.series.circ.map((c, i) => ({
       name: c.nom, type: "line", showSymbol: false, lineStyle: { width: 1.2 },
       data: c.pk.map((pk, k) => [pk, +(c.u[k] / uDiv).toFixed(3)]),
@@ -221,7 +223,7 @@ function Resultats({ r }: { r: EtudeResultat }) {
       axisLabel: { formatter: (v: number) => fmt(v, 1) },
     }),
     yAxis: styledAxis({ type: "value", name: ac ? "MVA" : "MW" }),
-    dataZoom: [{ type: "inside" }],
+    dataZoom: [ZOOM_INTERIEUR],
     series: r.series.sst.map(s => ({
       name: s.nom, type: "line", showSymbol: false, lineStyle: { width: 1.2 },
       data: s.p.map((p, k) => [+(r.series.t_sst[k] / 3600).toFixed(4), +(p / 1000).toFixed(3)]),
@@ -231,9 +233,9 @@ function Resultats({ r }: { r: EtudeResultat }) {
   const kpis = [
     { label: "Tension minimale", value: fmtU(g.u_min, ac), sub: g.pire ? g.pire.nom : "", variant: conforme ? "green" : "danger" },
     { label: "Tension moy. utile (zone min)", value: fmtU(g.u_moy_zone_min, ac), sub: "EN 50388-1", variant: "default" },
-    { label: "Énergie SST", value: `${fmt(g.energie_sst_kwh / 1000, 2)} MWh`, sub: `${g.nb_circ} circulations`, variant: "default" },
-    { label: "Énergie récupérée", value: `${fmt(g.recup_kwh / 1000, 2)} MWh`, sub: "freinage", variant: "green" },
-    { label: "Pertes", value: `${fmt((g.pertes_ligne_kwh + g.pertes_sst_kwh) / 1000, 2)} MWh`, sub: "ligne + SST", variant: "warn" },
+    { label: "Énergie SST", value: fmtE(g.energie_sst_kwh), sub: `${g.nb_circ} circulations`, variant: "default" },
+    { label: "Énergie récupérée", value: fmtE(g.recup_kwh), sub: "freinage", variant: "green" },
+    { label: "Pertes", value: fmtE(g.pertes_ligne_kwh + g.pertes_sst_kwh), sub: "ligne + SST", variant: "warn" },
     { label: "Rendement", value: `${fmt(g.rendement != null ? g.rendement * 100 : null, 1)} %`, sub: "trains / SST", variant: "default" },
   ];
 
@@ -267,7 +269,7 @@ function Resultats({ r }: { r: EtudeResultat }) {
 
       <div className="card" style={{ marginBottom: "var(--sp-md)" }}>
         <div className="card-title"><ShieldCheck size={16} style={{ color: C.violet }} /> Conformité – situation normale</div>
-        <table className="data-table">
+        <div className="table-container"><table className="data-table">
           <thead><tr><th>Critère</th><th>Référence</th><th>Valeur / seuil</th><th>Résultat</th></tr></thead>
           <tbody>
             {r.conf.map(c => (
@@ -279,13 +281,13 @@ function Resultats({ r }: { r: EtudeResultat }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {r.n1.length > 0 && (
         <div className="card" style={{ marginBottom: "var(--sp-md)" }}>
           <div className="card-title"><AlertTriangle size={16} style={{ color: C.warn }} /> Situations dégradées N-1</div>
-          <table className="data-table">
+          <div className="table-container"><table className="data-table">
             <thead><tr><th>Situation</th><th>Tension min.</th><th>PK</th><th>Tension moy. utile</th><th>Charge horaire max</th><th>Résultat</th></tr></thead>
             <tbody>
               {r.n1.map(c => {
@@ -302,7 +304,7 @@ function Resultats({ r }: { r: EtudeResultat }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
@@ -318,21 +320,21 @@ function Resultats({ r }: { r: EtudeResultat }) {
 
       <div className="card">
         <div className="card-title"><Zap size={16} style={{ color: C.warn }} /> Sous-stations</div>
-        <table className="data-table">
+        <div className="table-container"><table className="data-table">
           <thead><tr><th>Sous-station</th><th>PK</th><th>Énergie</th><th>Pointe</th><th>Charge horaire</th><th>Tension min.</th></tr></thead>
           <tbody>
             {r.A.sst.map(s => (
               <tr key={s.nom} style={{ opacity: s.actif ? 1 : 0.5 }}>
                 <td>{s.nom}{!s.actif && " (hors service)"}</td>
                 <td>{fmt(s.pk, 3)}</td>
-                <td>{fmt(s.energie_kwh)} kWh</td>
+                <td>{fmtE(s.energie_kwh)}</td>
                 <td>{fmt(ac ? s.s_max : s.p_max)} {ac ? "kVA" : "kW"}</td>
                 <td>{fmt(s.charge)} {ac ? "kVA" : "kW"}</td>
                 <td>{fmtU(s.u_min, ac)}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

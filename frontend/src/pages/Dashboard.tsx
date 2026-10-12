@@ -36,7 +36,7 @@ const areaGradient = (color: string, opacity: number) => ({
 
 const voltageOption: EChartsOption = {
   xAxis: styledAxis({ type: "value", min: 0, max: 133, axisLabel: { formatter: "{value} km" } }),
-  yAxis: styledAxis({ type: "value", min: 15, max: 27, axisLabel: { formatter: "{value} kV" } }),
+  yAxis: styledAxis({ type: "value", min: 15, max: 27, interval: 2, axisLabel: { formatter: "{value} kV" } }),
   series: [
     { name: "V nominal", type: "line", showSymbol: false, data: voltageProfile.map(d => [d.km, 25]),
       lineStyle: { color: C.muted, type: "dashed", width: 1 }, itemStyle: { color: C.muted } },

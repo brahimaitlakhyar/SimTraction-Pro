@@ -4,7 +4,7 @@ import { LineChart, BarChart } from "echarts/charts";
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsOption } from "echarts";
-import { BASE_OPTION } from "./chartTheme";
+import { avecTheme } from "./chartTheme";
 
 // Import modulaire : n'embarquer que les briques utilisées (à compléter au besoin)
 echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
@@ -33,7 +33,7 @@ export default function EChart({ option, height = 220 }: EChartProps) {
   }, []);
 
   useEffect(() => {
-    chartRef.current?.setOption({ ...BASE_OPTION, ...option }, { notMerge: true });
+    chartRef.current?.setOption(avecTheme(option), { notMerge: true });
   }, [option]);
 
   return <div ref={ref} style={{ width: "100%", height }} />;

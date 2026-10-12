@@ -382,3 +382,22 @@ table.data-table {
 /* ─── Rotation (icônes de chargement) ───────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+/* ─── Page Simulation : paramètres à gauche, ou au-dessus sur écran moyen ─── */
+.sim-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--sp-xl);
+  align-items: start;
+}
+.sim-config { position: sticky; top: var(--sp-xl); }
+@media (max-width: 1440px) {
+  .sim-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-lg); }
+  .sim-config { position: static; }
+  .sim-config-champs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    column-gap: var(--sp-md);
+    align-items: end;
+  }
+}

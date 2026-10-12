@@ -59,24 +59,24 @@ export default function Materials() {
                       </div>
                     </td>
                     <td>
-                      <span className="badge badge-info" style={{ background: `${t.color}20`, color: t.color, borderColor: `${t.color}40` }}>
+                      <span className="badge badge-info" style={{ background: `${t.color}20`, color: t.color, borderColor: `${t.color}40`, whiteSpace: "nowrap" }}>
                         {t.label}
                       </span>
                     </td>
-                    <td>{fmt(m.masse_t)} t</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{fmt(m.masse_t)} t</td>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
                         <Gauge size={14} style={{ color: "var(--clr-muted)" }} />
                         {fmt(m.v_max)} km/h
                       </div>
                     </td>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
                         <Zap size={14} style={{ color: "var(--clr-warn)" }} />
                         {fmt(m.p_max_kw)} kW
                       </div>
                     </td>
-                    <td>{m.u_nom >= 10000 ? `${fmt(m.u_nom / 1000)} kV` : `${fmt(m.u_nom)} V`}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{m.u_nom >= 10000 ? `${fmt(m.u_nom / 1000)} kV` : `${fmt(m.u_nom)} V`}</td>
                   </tr>
                 );
               })}

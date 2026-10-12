@@ -17,3 +17,9 @@ export function fmtHms(t: number): string {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`;
 }
+
+/** Énergie : kWh sous 1 MWh, MWh au-delà. */
+export function fmtE(kwh: number | null | undefined): string {
+  if (kwh == null || !isFinite(kwh)) return "–";
+  return Math.abs(kwh) < 1000 ? `${fmt(kwh)} kWh` : `${fmt(kwh / 1000, 2)} MWh`;
+}
