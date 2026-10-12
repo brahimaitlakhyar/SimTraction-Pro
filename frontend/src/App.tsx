@@ -1,6 +1,6 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, Play, FolderOpen, Train, Zap,
+  LayoutDashboard, Play, FolderOpen, Train, Zap, Ruler,
   Settings, FileBarChart, BookOpen
 } from "lucide-react";
 import "./index.css";
@@ -9,8 +9,9 @@ import Dashboard  from "./pages/Dashboard";
 import Simulation from "./pages/Simulation";
 import Projects   from "./pages/Projects";
 import Materials  from "./pages/Materials";
+import Dimensionnement from "./pages/Dimensionnement";
 
-type PageId = "dashboard" | "simulation" | "projects" | "materials" | "substations" | "reports" | "settings";
+type PageId = "dashboard" | "simulation" | "dimensionnement" | "projects" | "materials" | "substations" | "reports" | "settings";
 
 const NAV = [
   {
@@ -23,6 +24,7 @@ const NAV = [
     section: "Simulation",
     items: [
       { id: "simulation"  as PageId, icon: Play,            label: "Lancer une simulation", badge: "v2" },
+      { id: "dimensionnement" as PageId, icon: Ruler,       label: "Dimensionnement" },
       { id: "projects"    as PageId, icon: FolderOpen,      label: "Projets" },
     ]
   },
@@ -42,6 +44,14 @@ const NAV = [
   },
 ];
 
+const PAGES: PageId[] = ["dashboard", "simulation", "dimensionnement", "projects", "materials", "substations", "reports", "settings"];
+
+/** Page courante lue dans l'adresse (#/dimensionnement) : elle survit au rechargement. */
+function pageDepuisAdresse(): PageId {
+  const p = window.location.hash.replace(/^#\/?/, "") as PageId;
+  return PAGES.includes(p) ? p : "dashboard";
+}
+
 function PlaceholderPage({ title }: { title: string }) {
   return (
     <div className="fade-in-up">
@@ -55,7 +65,14 @@ function PlaceholderPage({ title }: { title: string }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<PageId>("dashboard");
+  const [page, setPageEtat] = useState<PageId>(pageDepuisAdresse);
+  const setPage = (p: PageId) => { window.location.hash = `/${p}`; setPageEtat(p); };
+
+  useEffect(() => {
+    const suivre = () => setPageEtat(pageDepuisAdresse());
+    window.addEventListener("hashchange", suivre);
+    return () => window.removeEventListener("hashchange", suivre);
+  }, []);
   const [projetSimule, setProjetSimule] = useState<string | undefined>();
 
   const simulerProjet = (id: string) => {
@@ -67,6 +84,7 @@ export default function App() {
     switch (page) {
       case "dashboard":   return <Dashboard />;
       case "simulation":  return <Simulation key={projetSimule} projectId={projetSimule} />;
+      case "dimensionnement": return <Dimensionnement />;
       case "projects":    return <Projects onSimuler={simulerProjet} />;
       case "materials":   return <Materials />;
       default:            return <PlaceholderPage title={page.charAt(0).toUpperCase() + page.slice(1)} />;

@@ -31,12 +31,15 @@ export interface SimulationRequest {
   dt: number;
   couplage: boolean;
   n1: boolean | "interm";
+  /** Alimentation proposée à vérifier sans l'enregistrer (solution de dimensionnement). */
+  alimentation?: { sst: SstProposee[]; postes: PostePropose[] };
 }
 
 export interface SimulationTask {
   task_id: string;
   project_id: string;
   status: "queued" | "running" | "done" | "error";
+  opts?: Record<string, unknown>;
   progress: number;
   message: string;
   error?: string | null;
@@ -154,4 +157,74 @@ export interface KpiCard {
   unit: string;
   variant?: "default" | "green" | "warn" | "danger";
   icon?: React.ComponentType<{ size?: number }>;
+}
+
+// ── Dimensionnement ─────────────────────────────────────────────────
+
+export interface SstProposee {
+  nom: string;
+  pk: number;
+  en_service: string;
+  u0: number;
+  p_nom_kw?: number;   // 3 kV
+  r_int?: number;      // 3 kV
+  s_nom_mva?: number;  // 25 kV
+  ucc_pct?: number;
+  scc_mva?: number;
+}
+
+export interface PostePropose {
+  nom: string;
+  pk: number;
+  type: "PS" | "SP" | "SSP" | "ATS";
+  at?: string;
+}
+
+export interface Besoin {
+  nom: string;
+  pk: number;
+  charge_n: number;
+  charge_n1: number;
+  cas_n1: string;
+  pointe: number;
+  requis: number;
+  choix: number | null;
+  taux: number | null;
+  desequilibre_pct: number | null;
+}
+
+export interface DimResultat {
+  ok: boolean;
+  message?: string;
+  n: number;
+  sst: SstProposee[];
+  postes: PostePropose[];
+  besoins: Besoin[];
+  cas: { nom: string; marge: number; marge_cap: number | null; u_min: number; u_moy: number | null }[];
+  essais: { n: number; pks: number[]; marge: number }[];
+  duree: number;
+  p_unite: number | null;
+  d0: number;
+  d1: number;
+  pertes_kwh: number;
+  energie_kwh: number;
+  taux_max: number;
+  ajouts_capacite: number;
+}
+
+export type DimParametres = Record<string, string | number | boolean | null>;
+
+export interface DimDefauts {
+  parametres: DimParametres;
+  candidats: { nom: string; pk: number; scc_mva: number }[];
+  variantes: number[];
+  systeme: SystemType;
+}
+
+export type DimSortie =
+  | { mode: "dimensionner"; D: DimParametres; resultat: DimResultat; famille: string; systeme: SystemType }
+  | { mode: "comparer"; D: DimParametres; variantes: (DimResultat & { D: DimParametres })[]; famille: string; systeme: SystemType };
+
+export interface TacheSuivie extends SimulationTask {
+  journal: string[];
 }

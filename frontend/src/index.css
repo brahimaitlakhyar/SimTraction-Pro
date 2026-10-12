@@ -401,3 +401,24 @@ table.data-table {
     align-items: end;
   }
 }
+
+/* ─── Page Dimensionnement ─────────────────────────────────────────── */
+.dim-champs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: var(--sp-md);
+  align-items: end;
+}
+.journal {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--sp-md);
+  background: var(--clr-bg);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--clr-muted);
+  white-space: pre-wrap;
+}

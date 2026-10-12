@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { EtudeResultat, Material, Project, SimulationRequest, SimulationTask } from "../types";
+import type { DimDefauts, DimParametres, DimSortie, EtudeResultat, Material, Project, SimulationRequest, SimulationTask, TacheSuivie } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -16,6 +16,14 @@ export const getProject  = (id: string) => api.get(`/api/v1/projects/${encodeURI
 export const runSimulation = (req: SimulationRequest) => api.post<SimulationTask>("/api/v1/simulation/run", req).then(r => r.data);
 export const getSimStatus  = (taskId: string) => api.get<SimulationTask>(`/api/v1/simulation/status/${taskId}`).then(r => r.data);
 export const getSimResult  = (taskId: string) => api.get<EtudeResultat>(`/api/v1/simulation/result/${taskId}`).then(r => r.data);
+
+// Dimensionnement
+export const getDimParametres = (id: string) =>
+  api.get<DimDefauts>(`/api/v1/dimensioning/parametres/${encodeURIComponent(id)}`).then(r => r.data);
+export const runDimensionnement = (req: { project_id: string; mode: "dimensionner" | "comparer"; parametres: DimParametres }) =>
+  api.post<TacheSuivie>("/api/v1/dimensioning/run", req).then(r => r.data);
+export const getDimStatus = (taskId: string) => api.get<TacheSuivie>(`/api/v1/dimensioning/status/${taskId}`).then(r => r.data);
+export const getDimResult = (taskId: string) => api.get<DimSortie>(`/api/v1/dimensioning/result/${taskId}`).then(r => r.data);
 
 // Materials
 export const getMaterials = () => api.get<Material[]>("/api/v1/materials/").then(r => r.data);
