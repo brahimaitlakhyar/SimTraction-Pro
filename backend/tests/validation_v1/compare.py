@@ -52,6 +52,13 @@ def _num(x: Any) -> Any:
 
 
 def _ecart(a: Any, b: Any) -> float:
+    if isinstance(a, (list, tuple)) or isinstance(b, (list, tuple)):
+        a, b = list(a or []), list(b or [])
+        if len(a) != len(b):
+            return math.inf
+        return max((_ecart(x, y) for x, y in zip(a, b)), default=0.0)
+    if isinstance(a, bool) or isinstance(b, bool):
+        return 0.0 if a == b else math.inf
     a, b = _num(a), _num(b)
     if a is None or b is None or isinstance(a, str) or isinstance(b, str):
         return 0.0 if a == b else math.inf
@@ -137,8 +144,8 @@ def comparer_etude(V: Dict[str, Any], P: Dict[str, Any]) -> List[Ecart]:
     chk("glob.u_min", V["A"]["glob"]["u_min"], P["A"]["glob"]["u_min"])
     chk("conf.nb", len(V["conf"]), len(P["conf"]))
     for i, (cv, cp) in enumerate(zip(V["conf"], P["conf"])):
-        chk(f"conf[{i}].valeur", cv["valeur"], cp["valeur"])
-        chk(f"conf[{i}].ok", cv["ok"], cp["ok"])
+        for k in ["critere", "norme", "valeur", "seuil", "ok", "txt"]:
+            chk(f"conf[{i}].{k}", cv.get(k), cp.get(k))
 
     chk("n1.nb", len(V["n1"]), len(P["n1"]))
     for nv, np_ in zip(V["n1"], P["n1"]):
@@ -147,7 +154,8 @@ def comparer_etude(V: Dict[str, Any], P: Dict[str, Any]) -> List[Ecart]:
         for j, (a, b) in enumerate(zip(nv["charges"], np_["charges"])):
             chk(f"{nv['nom']}.charges[{j}]", a, b)
         for i, (cv, cp) in enumerate(zip(nv["conf"], np_["conf"])):
-            chk(f"{nv['nom']}.conf[{i}].ok", cv["ok"], cp["ok"])
+            for k in ["critere", "ok", "txt"]:
+                chk(f"{nv['nom']}.conf[{i}].{k}", cv.get(k), cp.get(k))
 
     sv, sp = V["series"], P["series"]
     chk("series.nb_circ", len(sv["circ"]), len(sp["circ"]))
@@ -181,6 +189,82 @@ def valider_etude(projet: str, dt: float = 5.0) -> List[Ecart]:
             V = json.load(f)["etude"]
     env = SimulationEnv(charger_projet_v1(os.path.join(DOSSIER_V1, "BDD", "projets", projet)))
     return comparer_etude(V, executer_etude(env, {"dt": dt, "couplage": True, "n1": True}))
+
+
+def _comparer_dim(rv: Dict[str, Any], rp: Dict[str, Any], prefixe: str, out: List[Ecart]):
+    """Compare un résultat de dimensionnement V1 (rv) et Python (rp)."""
+    def chk(nom: str, a: Any, b: Any):
+        out.append((_ecart(a, b), f"{prefixe}{nom}", a, b))
+
+    chk("ok", rv["ok"], rp["ok"])
+    chk("nb_essais", len(rv["essais"]), len(rp["essais"]))
+    for i, (ev, ep) in enumerate(zip(rv["essais"], rp["essais"])):
+        chk(f"essais[{i}].pks", ev["pks"], ep["pks"])
+        chk(f"essais[{i}].marge", ev["marge"], ep["marge"])
+        if "marge_n1" in ev or "marge_n1" in ep:
+            chk(f"essais[{i}].marge_n1", ev.get("marge_n1"), ep.get("marge_n1"))
+    if not rv["ok"]:
+        chk("message", rv["message"], rp["message"])
+        return
+    for k in ["n", "ajouts_capacite", "n1", "pertes_kwh", "energie_kwh", "taux_max", "l_km"]:
+        chk(k, rv[k], rp[k])
+    chk("nb_sst", len(rv["sst"]), len(rp["sst"]))
+    for i, (sv, sp) in enumerate(zip(rv["sst"], rp["sst"])):
+        for k in sorted(set(sv) | set(sp)):
+            chk(f"sst[{i}].{k}", sv.get(k), sp.get(k))
+    chk("postes", [(p["nom"], p["pk"], p["type"]) for p in rv["postes"]],
+        [(p["nom"], p["pk"], p["type"]) for p in rp["postes"]])
+    for i, (bv, bp) in enumerate(zip(rv["besoins"], rp["besoins"])):
+        for k in ["nom", "pk", "charge_n", "charge_n1", "cas_n1", "pointe", "requis", "choix", "taux", "desequilibre_pct", "scc"]:
+            chk(f"besoins[{i}].{k}", bv.get(k), bp.get(k))
+    chk("nb_cas", len(rv["cas"]), len(rp["cas"]))
+    for i, (cv, cp) in enumerate(zip(rv["cas"], rp["cas"])):
+        for k in ["nom", "marge", "marge_cap", "u_min", "u_moy"]:
+            chk(f"cas[{i}].{k}", cv.get(k), cp.get(k))
+
+
+def valider_dimensionnement(projet: str, mode: str = "dimensionner") -> List[Ecart]:
+    """
+    Dimensionnement (mode « dimensionner ») ou comparaison de variantes (« comparer ») :
+    worker V1 sous Node face à la chaîne Python complète (paramètres, recherche, journal).
+    """
+    from app.physics.dimensioning import comparer_variantes, dimensionner, liste_variantes, parametres_dimensionnement
+    from app.services.bdd_v1 import lire_reglages, projet_pour_calcul
+
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("Node.js introuvable : nécessaire pour exécuter le moteur V1.")
+    with tempfile.TemporaryDirectory() as tmp:
+        sortie = os.path.join(tmp, "v1.json")
+        subprocess.run([node, os.path.join(ICI, "v1_run.js"), DOSSIER_V1, projet, "5", sortie, mode],
+                       check=True, capture_output=True, text=True, encoding="utf-8")
+        with open(sortie, encoding="utf-8") as f:
+            V = json.load(f)
+
+    P = projet_pour_calcul(projet)
+    D = parametres_dimensionnement(P, lire_reglages())
+    out: List[Ecart] = []
+    dv = {k: v for k, v in V["D"].items() if k != "candidats"}
+    dp = {k: v for k, v in D.items() if k != "candidats"}
+    for k in sorted(set(dv) | set(dp)):
+        out.append((_ecart(dv.get(k), dp.get(k)), f"D.{k}", dv.get(k), dp.get(k)))
+
+    env = SimulationEnv(P)
+    logs: List[str] = []
+    if mode == "comparer":
+        variantes = liste_variantes(D)
+        out.append((_ecart(V["variantes"], variantes), "variantes", V["variantes"], variantes))
+        resultats = comparer_variantes(env, variantes, D, log=logs.append)
+        for i, (rv, rp) in enumerate(zip(V["resultat"]["variantes"], resultats)):
+            _comparer_dim(rv, rp, f"variante[{i}].", out)
+    else:
+        _comparer_dim(V["resultat"]["r"], dimensionner(env, D, log=logs.append), "", out)
+    out.append((0.0 if V["logs"] == logs else math.inf, "journal", len(V["logs"]), len(logs)))
+    if V["logs"] != logs:
+        i = next((i for i, (a, b) in enumerate(zip(V["logs"], logs)) if a != b), min(len(V["logs"]), len(logs)))
+        out.append((math.inf, f"journal[{i}]", V["logs"][i] if i < len(V["logs"]) else None, logs[i] if i < len(logs) else None))
+    out.sort(key=lambda e: -e[0])
+    return out
 
 
 def main():

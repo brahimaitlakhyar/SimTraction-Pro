@@ -1,482 +1,509 @@
 """
-Module de dimensionnement et d'implantation automatique des sous-stations de traction.
-- Recherche du nombre minimal de sous-stations par renforcement successif du point faible
-- Vérification combinatoire en situation normale et dégradée N-1
-- Sélection des calibres normalisés de puissance (transformateurs / groupes redresseurs)
-- Comparaison de puissances unitaires imposées (ex: 3 MW vs 6 MW ou 20 MVA vs 40 MVA).
+Dimensionnement et implantation automatique des sous-stations de traction.
+Transposition fidèle de ST.dimensionner (SimTraction V1), validée contre V1 exécuté sous Node :
+- nombre minimal de sous-stations, puis renforcement successif du point faible (tension) ou de la
+  sous-station surchargée (puissance unitaire imposée) ;
+- vérification en situation normale et dégradée N-1 ;
+- élagage des sous-stations superflues ;
+- choix des calibres normalisés (groupes redresseurs en kW, transformateurs en kVA) ;
+- comparaison de puissances unitaires imposées (ex. 3 MW / 6 MW, 20 / 40 MVA).
+Les arrondis JavaScript (Math.round, toFixed) sont reproduits par jscompat.
 """
 
-import time
 import math
-from typing import List, Dict, Any, Optional, Callable
-import numpy as np
+import time
+from typing import Any, Callable, Dict, List, Optional
 
-from .simulation import SimulationEnv, build_network_configuration, build_configuration_n1, calculer_profils_isoles, simuler, analyser
+from .jscompat import js_fixed, js_fixed_num, js_num, js_round, js_sign, js_str
+from .simulation import (
+    SimulationEnv,
+    analyser,
+    build_configuration_n1,
+    build_network_configuration,
+    calculer_profils_isoles,
+    simuler,
+)
+
+Progression = Callable[[float], None]
+Journal = Callable[[str], None]
+
+
+def parametres_dimensionnement(P: Dict[str, Any], reglages: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Paramètres de la recherche (équivalent de paramsDim en V1) : valeurs du projet, et à défaut
+    celles de reglages.csv propres au système (dim.<systeme>.*) ou communes (dim.*).
+    """
+    systeme = P.get("systeme") or "cc3000"
+    ac = systeme != "cc3000"
+    sy = f"dim.{systeme}."
+
+    def reg(code: str, defaut: Any = None) -> Any:
+        v = reglages.get(code)
+        return ("" if defaut is None else defaut) if v in ("", None) else v
+
+    defauts = {
+        "pas_min_km": reg(sy + "pas_min_km"),
+        "pas_max_km": reg(sy + "pas_max_km"),
+        "puissances": str(reg(sy + "puissances")).replace("/", ";"),
+        "surcharge_n": reg("dim.surcharge_n"),
+        "surcharge_n1": reg("dim.surcharge_n1"),
+        "surcharge_pointe": reg(sy + "surcharge_pointe"),
+        "variantes": str(reg(sy + "variantes", "20000/40000" if ac else "3000/6000")).replace("/", ";"),
+    }
+    if not ac:
+        defauts["chute_pct"] = reg(sy + "chute_pct", 6)
+    if ac:
+        defauts["pas_at_km"] = reg(sy + "pas_at_km")
+    else:
+        defauts["pas_ps_km"] = reg(sy + "pas_ps_km")
+
+    src = dict(P.get("dimensionnement") or {})
+    for k in ("puissances", "variantes"):  # séparateur « ; » comme à la lecture du CSV par V1
+        if isinstance(src.get(k), str):
+            src[k] = src[k].replace("/", ";")
+    D: Dict[str, Any] = {}
+    for k, v in src.items():
+        D[k] = defauts.get(k) if v in ("", None) else v
+    for k in ("pas_min_km", "pas_max_km", "puissances", "surcharge_n", "surcharge_n1", "surcharge_pointe",
+              "pas_at_km", "pas_ps_km", "variantes", "chute_pct"):
+        if D.get(k) in ("", None):
+            D[k] = defauts.get(k)
+    n1 = src.get("n1")
+    D["n1"] = False if n1 == "non" else ("interm" if n1 == "interm" else True)
+    D["dt"] = js_num(src.get("dt"), 0.0) or 5.0
+    return D
+
+
+def liste_variantes(D: Dict[str, Any]) -> List[float]:
+    """Puissances unitaires à comparer (listeVariantes en V1) : uniques, croissantes."""
+    out: List[float] = []
+    for x in str(D.get("variantes") or "").replace("/", " ").replace(";", " ").split():
+        v = js_num(x.replace(",", ".", 1), 0.0)
+        if v > 0 and v not in out:
+            out.append(v)
+    return sorted(out)
 
 
 def dimensionner(
     env: SimulationEnv,
-    dim_opts: Optional[Dict[str, Any]] = None,
-    prog_callback: Optional[Callable[[float], None]] = None,
-    log_callback: Optional[Callable[[str], None]] = None
+    D: Optional[Dict[str, Any]] = None,
+    progression: Optional[Progression] = None,
+    log: Optional[Journal] = None,
 ) -> Dict[str, Any]:
-    """Exécute l'algorithme d'optimisation d'implantation et de puissance des sous-stations."""
+    """Recherche automatique des sous-stations et des postes (ST.dimensionner)."""
     t0 = time.time()
-    D = dim_opts or {}
-    ac = (env.famille != "cc3000")
-    alim0 = env.P.get("alimentation") or {}
-    dt = float(D.get("dt", 5.0) or 5.0)
-
-    def log(msg: str):
-        if log_callback:
-            log_callback(msg)
-
-    def progress(f: float):
-        if prog_callback:
-            prog_callback(f)
+    D = D or {}
+    ac = env.famille != "cc3000"
+    A0 = env.P.get("alimentation") or {}
+    dt = js_num(D.get("dt"), 5.0)
+    log = log or (lambda _m: None)
+    progression = progression or (lambda _f: None)
+    unite = "kVA" if ac else "kW"
 
     profils = calculer_profils_isoles(env, dt)
     d0 = float(env.troncons[0]["pk_ini"])
     d1 = float(env.troncons[-1]["pk_fin"])
     L = d1 - d0
 
-    cands_raw = D.get("candidats") or []
-    cands = sorted(
-        [
-            {
-                "nom": c.get("nom") or f"Site PK {float(c.get('pk', 0)):.1f}",
-                "pk": float(c["pk"]),
-                "scc_mva": float(c.get("scc_mva", 2000.0) or 2000.0),
-            }
-            for c in cands_raw
-            if c.get("pk") is not None and str(c.get("pk")).strip() != ""
-        ],
-        key=lambda x: x["pk"]
-    )
+    cands = [
+        {"nom": c.get("nom") or ("Site PK " + js_str(js_num(c["pk"], 0.0))),
+         "pk": js_num(c["pk"], 0.0), "scc_mva": js_num(c.get("scc_mva"), 2000.0)}
+        for c in (D.get("candidats") or [])
+        if c.get("pk") not in ("", None)
+    ]
+    cands.sort(key=lambda c: c["pk"])
 
-    pas_max = float(D.get("pas_max_km", 60.0 if ac else 25.0) or (60.0 if ac else 25.0))
-    pas_min = float(D.get("pas_min_km", 25.0 if ac else 8.0) or (25.0 if ac else 8.0))
+    pas_max = js_num(D.get("pas_max_km"), 60.0 if ac else 25.0)
+    pas_min = js_num(D.get("pas_min_km"), 25.0 if ac else 8.0)
+    brut = D.get("puissances")
+    elems = brut if isinstance(brut, list) else str(brut or "").replace(";", " ").split()
+    std = sorted(v for v in (js_num(str(x).replace(",", ".", 1), 0.0) for x in elems) if v > 0)
+    sN = js_num(D.get("surcharge_n"), 1.0)
+    sN1 = js_num(D.get("surcharge_n1"), 1.5)
+    sP = js_num(D.get("surcharge_pointe"), 2.0 if ac else 3.0)
+    tmpl = (A0.get("sst") or [{}])[0] if A0.get("sst") else {}
 
-    puissances_raw = D.get("puissances", "")
-    if isinstance(puissances_raw, list):
-        std_p = [float(x) for x in puissances_raw if float(x) > 0]
-    else:
-        std_p = [float(x.replace(",", ".").strip()) for x in str(puissances_raw).replace(";", " ").replace("/", " ").split() if x.strip() and float(x.replace(",", ".").strip()) > 0]
-    std_p.sort()
-
-    sN = float(D.get("surcharge_n", 1.0) or 1.0)
-    sN1 = float(D.get("surcharge_n1", 1.5) or 1.5)
-    sP = float(D.get("surcharge_pointe", 2.0 if ac else 3.0) or (2.0 if ac else 3.0))
-
-    pU_val = D.get("p_unite")
-    pU = float(str(pU_val).replace(",", ".").strip()) if pU_val not in (None, "") else 0.0
+    # Puissance unitaire imposée (variante « toutes les sous-stations à X kW / kVA »)
+    pU = js_num(str("" if D.get("p_unite") is None else D.get("p_unite")).replace(",", ".", 1), 0.0)
     if pU > 0:
-        std_p = [pU]
+        std = [pU]
+    u0cc = js_num(tmpl.get("u0"), 3600.0)
+    chute = js_num(str("" if D.get("chute_pct") is None else D.get("chute_pct")).replace(",", ".", 1), 6.0)
+    un = js_num(env.normes.get("un"), 3000.0)
 
-    tmpl_sst = (alim0.get("sst") or [{}])[0] if (alim0.get("sst")) else {}
-    u0cc = float(tmpl_sst.get("u0", 3600.0) or 3600.0)
-    chute_pct = float(str(D.get("chute_pct", 6.0) or 6.0).replace(",", "."))
+    def r_int_pour(p: float) -> float:
+        inom = p * 1000.0 / un
+        return js_fixed_num(chute / 100.0 * u0cc / inom, 4)
 
-    def r_int_pour(p_kw: float) -> float:
-        inom = p_kw * 1000.0 / float(env.normes.get("un", 3000.0))
-        return round(chute_pct / 100.0 * u0cc / max(inom, 1.0), 4)
-
-    def make_sst_at(pk: float, nom: str, scc: float = 2000.0) -> Dict[str, Any]:
+    def sst_at(pk: float, nom: str, scc: Optional[float] = None) -> Dict[str, Any]:
         if ac:
-            s_nom_val = (std_p[-1] / 1000.0) if std_p else 40.0
-            return {
-                "nom": nom,
-                "pk": round(pk, 3),
-                "s_nom_mva": s_nom_val,
-                "ucc_pct": float(tmpl_sst.get("ucc_pct", 10.0) or 10.0),
-                "scc_mva": scc or float(tmpl_sst.get("scc_mva", 2000.0) or 2000.0),
-                "u0": float((alim0.get("ac") or {}).get("u0", 27500.0) or 27500.0),
-                "en_service": "oui",
-            }
-        return {
-            "nom": nom,
-            "pk": round(pk, 3),
-            "u0": u0cc,
-            "r_int": r_int_pour(pU) if pU > 0 else float(tmpl_sst.get("r_int", 0.05) or 0.05),
-            "p_nom_kw": std_p[-1] if std_p else 9000.0,
-            "en_service": "oui",
-        }
+            return {"nom": nom, "pk": js_fixed_num(pk, 3), "s_nom_mva": std[-1] / 1000.0 if std else 40.0,
+                    "ucc_pct": js_num(tmpl.get("ucc_pct"), 10.0),
+                    "scc_mva": scc if scc else js_num(tmpl.get("scc_mva"), 2000.0),
+                    "u0": js_num((A0.get("ac") or {}).get("u0"), 27500.0), "en_service": "oui"}
+        return {"nom": nom, "pk": js_fixed_num(pk, 3), "u0": u0cc,
+                "r_int": r_int_pour(pU) if pU > 0 else js_num(tmpl.get("r_int"), 0.05),
+                "p_nom_kw": std[-1] if std else 9000.0, "en_service": "oui"}
 
-    def make_postes_pour(pks: List[float]) -> List[Dict[str, Any]]:
-        out = []
-        s_sorted = sorted(pks)
+    def postes_pour(pks: List[float]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        s = sorted(pks)
         if ac:
-            pas_at = float(D.get("pas_at_km", 15.0 if env.systeme == "ac2x25" else 20.0) or 15.0)
-            for i in range(len(s_sorted) - 1):
-                mid_pk = (s_sorted[i] + s_sorted[i + 1]) / 2.0
-                out.append({"nom": f"SP PK {mid_pk:.1f}", "pk": round(mid_pk, 3), "type": "SP"})
-
+            deux = env.P.get("systeme") == "ac2x25"
+            pas_at = js_num(D.get("pas_at_km"), 15.0 if deux else 20.0)
+            for i in range(len(s) - 1):
+                xm = (s[i] + s[i + 1]) / 2.0
+                out.append({"nom": "SP PK " + js_fixed(xm, 1), "pk": js_fixed_num(xm, 3), "type": "SP"})
+            # SSP / ATS entre chaque SST et les SP (ou les extrémités)
             marks = [d0]
-            for i, x in enumerate(s_sorted):
+            for i, x in enumerate(s):
                 marks.append(x)
-                if i < len(s_sorted) - 1:
-                    marks.append((x + s_sorted[i + 1]) / 2.0)
+                if i < len(s) - 1:
+                    marks.append((x + s[i + 1]) / 2.0)
             marks.append(d1)
-
+            typ = "ATS" if deux else "SSP"
             for j in range(len(marks) - 1):
-                a_m = marks[j]
-                b_m = marks[j + 1]
-                k_div = int(math.ceil((b_m - a_m) / pas_at))
-                for q in range(1, k_div):
-                    x_at = a_m + (b_m - a_m) * q / k_div
-                    p_type = "ATS" if env.systeme == "ac2x25" else "SSP"
-                    out.append({"nom": f"{p_type} PK {x_at:.1f}", "pk": round(x_at, 3), "type": p_type})
+                a, b = marks[j], marks[j + 1]
+                k = math.ceil((b - a) / pas_at)
+                for q in range(1, k):
+                    x = a + (b - a) * q / k
+                    out.append({"nom": f"{typ} PK " + js_fixed(x, 1), "pk": js_fixed_num(x, 3), "type": typ})
         else:
-            pas_ps = float(D.get("pas_ps_km", 10.0) or 10.0)
-            for i in range(len(s_sorted) - 1):
-                if s_sorted[i + 1] - s_sorted[i] > pas_ps:
-                    xm = (s_sorted[i] + s_sorted[i + 1]) / 2.0
-                    out.append({"nom": f"PS PK {xm:.1f}", "pk": round(xm, 3), "type": "PS"})
-
+            pas_ps = js_num(D.get("pas_ps_km"), 10.0)
+            for i in range(len(s) - 1):
+                if s[i + 1] - s[i] > pas_ps:
+                    xm = (s[i] + s[i + 1]) / 2.0
+                    out.append({"nom": "PS PK " + js_fixed(xm, 1), "pk": js_fixed_num(xm, 3), "type": "PS"})
         out.sort(key=lambda p: p["pk"])
         return out
 
-    def evaluer(sst_l: List[Dict[str, Any]], postes_l: List[Dict[str, Any]], avec_n1: bool) -> Dict[str, Any]:
-        cas = [{"nom": "normale", "k": None, "ov": {"sst": sst_l, "postes": postes_l}}]
+    def capacite(A: Dict[str, Any], deg: bool, sst_l: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Taux de charge à puissance imposée et position du renfort (milieu de l'intervalle le plus chargé)."""
+        if not pU > 0:
+            return None
+        pire = None
+        pks = [s["pk"] for s in sst_l]
+        for k, s in enumerate(A["sst"]):
+            if not s["actif"]:
+                continue
+            pointe = s["s_1min"] if ac else s["p_1min"]
+            taux = max(s["charge"] / ((sN1 if deg else sN) * pU), pointe / (sP * pU))
+            if pire is None or taux > pire["taux"]:
+                pire = {"k": k, "taux": taux, "nom": s["nom"], "s": s}
+        if pire is None:
+            return None
+        x = pks[pire["k"]]
+        gauche = pire["s"]["fd_g_max"] >= pire["s"]["fd_d_max"]
+        voisins = [p for j, p in enumerate(pks) if j != pire["k"]]
+        g = max([d0] + [p for p in voisins if p < x])
+        d = min([d1] + [p for p in voisins if p > x])
+        pk = (g + x) / 2.0 if gauche else (x + d) / 2.0
+        return {"marge": 1.0 - pire["taux"], "taux": pire["taux"], "nom": pire["nom"], "pk": pk}
+
+    def evaluer(sst_l: List[Dict[str, Any]], postes: List[Dict[str, Any]], avec_n1: bool) -> Dict[str, Any]:
+        cas: List[Dict[str, Any]] = [{"nom": "normale", "k": None, "ov": {"sst": sst_l, "postes": postes}}]
         if avec_n1:
             for k, s in enumerate(sst_l):
                 if n1_interm and len(sst_l) > 2 and (k == 0 or k == len(sst_l) - 1):
-                    continue
-                cas.append({"nom": f"N-1 {s['nom']}", "k": k, "ov": {"sst": sst_l, "postes": postes_l}})
-
-        out_eval: Dict[str, Any] = {
-            "cas": [],
-            "ok": True,
-            "marge": float("inf"),
-            "pire": None,
-            "marge_cap": float("inf"),
-            "pire_cap": None,
-        }
-
-        for c_item in cas:
-            cfg_ev = build_network_configuration(env, c_item["ov"]) if c_item["k"] is None else build_configuration_n1(env, c_item["k"], c_item["ov"])
-            R_ev = simuler(env, {"cfg": cfg_ev, "profils": profils, "dt": dt})
-            A_ev = analyser(env, R_ev)
-
-            deg = (c_item["k"] is not None)
-            N_norm = env.normes
-            su = float(N_norm.get("umin2") if deg else N_norm.get("umin1"))
-            sz = float(N_norm.get("umoy_zone_degrade") if deg else N_norm.get("umoy_zone"))
-            un_val = float(N_norm.get("un", 3000.0))
-
-            m1 = (A_ev["glob"]["u_min"] - su) / un_val
-            m2 = (A_ev["glob"]["u_moy_zone_min"] - sz) / un_val if math.isfinite(A_ev["glob"]["u_moy_zone_min"]) else 1.0
-            marge_cas = min(m1, m2)
-
-            cap_eval = None
-            if pU > 0:
-                pire_c = None
-                for k_sst, sst_st in enumerate(A_ev["sst"]):
-                    if not sst_st.get("actif"):
-                        continue
-                    pt = sst_st["s_1min"] if ac else sst_st["p_1min"]
-                    ch = sst_st["charge"]
-                    taux = max(ch / ((sN1 if deg else sN) * pU), pt / (sP * pU))
-                    if pire_c is None or taux > pire_c["taux"]:
-                        pire_c = {"k": k_sst, "taux": taux, "nom": sst_st["nom"]}
-                if pire_c:
-                    cap_eval = {"marge": 1.0 - pire_c["taux"], "taux": pire_c["taux"], "nom": pire_c["nom"], "k": pire_c["k"]}
-
-            out_eval["cas"].append({
-                "nom": c_item["nom"],
-                "k": c_item["k"],
-                "A": A_ev,
-                "marge": marge_cas,
-                "marge_cap": cap_eval["marge"] if cap_eval else None,
-            })
-
-            if marge_cas < out_eval["marge"]:
-                out_eval["marge"] = marge_cas
-                out_eval["pire"] = {
-                    "cas": c_item["nom"],
-                    "k": c_item["k"],
-                    "pk": A_ev["glob"]["pire"]["pk_u_min"] if A_ev["glob"]["pire"] else None,
-                }
-
-            if cap_eval and cap_eval["marge"] < out_eval["marge_cap"]:
-                out_eval["marge_cap"] = cap_eval["marge"]
-                out_eval["pire_cap"] = {
-                    "cas": c_item["nom"],
-                    "pk": float(sst_l[cap_eval["k"]]["pk"]),
-                    "nom": cap_eval["nom"],
-                    "taux": cap_eval["taux"],
-                }
-
-        out_eval["ok_u"] = (out_eval["marge"] >= 0.0)
-        out_eval["ok_cap"] = not (out_eval["marge_cap"] < 0.0)
-        out_eval["ok"] = bool(out_eval["ok_u"] and out_eval["ok_cap"])
-
-        if out_eval["ok_u"] and not out_eval["ok_cap"] and out_eval["pire_cap"]:
-            out_eval["pire"] = {
-                "cas": out_eval["pire_cap"]["cas"],
-                "pk": out_eval["pire_cap"]["pk"],
-                "cap": True,
-                "nom": out_eval["pire_cap"]["nom"],
-            }
-
-        return out_eval
-
-    def placer(n_sst: int) -> List[Any]:
-        pks = []
-        if n_sst == 1:
-            pks.append(d0 + L / 2.0)
-        else:
-            a_ext = min(L / (n_sst - 1 + 0.5) * 0.25, L / 4.0)
-            sp = (L - 2.0 * a_ext) / (n_sst - 1)
-            for i in range(n_sst):
-                pks.append(d0 + a_ext + sp * i)
-
-        if not cands:
-            return [round(x * 2.0) / 2.0 for x in pks]
-
-        used = set()
-        out_cands = []
-        for x in pks:
-            best_idx = -1
-            best_d = float("inf")
-            for j, c in enumerate(cands):
-                if j not in used and abs(c["pk"] - x) < best_d:
-                    best_d = abs(c["pk"] - x)
-                    best_idx = j
-            if best_idx >= 0:
-                used.add(best_idx)
-                out_cands.append(best_idx)
-        out_cands.sort()
-        return out_cands
-
-    def liste_sst(positions: List[Any]) -> List[Dict[str, Any]]:
-        out = []
-        for i, pos_item in enumerate(positions):
-            if cands:
-                c = cands[pos_item]
-                out.append(make_sst_at(c["pk"], c["nom"], c["scc_mva"]))
-            else:
-                pk_val = float(pos_item)
-                out.append(make_sst_at(pk_val, f"SST {i + 1} (PK {pk_val:.1f})"))
+                    continue  # extrémités doublées (2 groupes / 2 arrivées HT)
+                cas.append({"nom": "N-1 " + s["nom"], "k": k, "ov": {"sst": sst_l, "postes": postes}})
+        out: Dict[str, Any] = {"cas": [], "ok": True, "marge": math.inf, "pire": None,
+                               "marge_cap": math.inf, "pire_cap": None}
+        N = env.normes
+        for c in cas:
+            cfg = build_network_configuration(env, c["ov"]) if c["k"] is None else build_configuration_n1(env, c["k"], c["ov"])
+            A = analyser(env, simuler(env, {"cfg": cfg, "profils": profils, "dt": dt}))
+            deg = c["k"] is not None
+            su = N["umin2"] if deg else N["umin1"]
+            sz = N["umoy_zone_degrade"] if deg else N["umoy_zone"]
+            m1 = (A["glob"]["u_min"] - su) / N["un"]
+            m2 = (A["glob"]["u_moy_zone_min"] - sz) / N["un"] if math.isfinite(A["glob"]["u_moy_zone_min"]) else 1.0
+            marge = min(m1, m2)
+            cap = capacite(A, deg, sst_l)
+            out["cas"].append({"nom": c["nom"], "k": c["k"], "A": A, "marge": marge,
+                               "marge_cap": cap["marge"] if cap else None})
+            if marge < out["marge"]:
+                pire = A["glob"]["pire"]
+                out["marge"] = marge
+                out["pire"] = {"cas": c["nom"], "k": c["k"], "pk": pire["pk_u_min"] if pire else None}
+            if cap and cap["marge"] < out["marge_cap"]:
+                out["marge_cap"] = cap["marge"]
+                out["pire_cap"] = {"cas": c["nom"], "pk": cap["pk"], "nom": cap["nom"], "taux": cap["taux"]}
+        out["ok_u"] = out["marge"] >= 0
+        out["ok_cap"] = not (out["marge_cap"] < 0)
+        out["ok"] = out["ok_u"] and out["ok_cap"]
+        # point faible à renforcer : la tension d'abord, sinon la sous-station surchargée
+        if out["ok_u"] and not out["ok_cap"]:
+            pc = out["pire_cap"]
+            out["pire"] = {"cas": pc["cas"], "pk": pc["pk"], "cap": True, "nom": pc["nom"]}
         return out
 
-    n_min = max(1, int(math.ceil(L / pas_max)))
-    n_max = max(n_min, int(math.ceil(L / pas_min)) + 2)
+    def placer(n: int) -> List[Any]:
+        if n == 1:
+            pks = [d0 + L / 2.0]
+        else:  # extrémités à un quart d'intervalle des terminus (antenne courte en N-1)
+            a = min(L / (n - 1 + 0.5) * 0.25, L / 4.0)
+            sp = (L - 2.0 * a) / (n - 1)
+            pks = [d0 + a + sp * i for i in range(n)]
+        if not cands:
+            return [js_round(x * 2.0) / 2.0 for x in pks]
+        used, out = set(), []
+        for x in pks:
+            best, bd = -1, math.inf
+            for j, c in enumerate(cands):
+                if j not in used and abs(c["pk"] - x) < bd:
+                    bd, best = abs(c["pk"] - x), j
+            if best >= 0:
+                used.add(best)
+                out.append(best)
+        return sorted(out)
+
+    def liste_sst(pos: List[Any]) -> List[Dict[str, Any]]:
+        out = []
+        for i, p in enumerate(pos):
+            if cands:
+                c = cands[p]
+                out.append(sst_at(c["pk"], c["nom"], c["scc_mva"]))
+            else:
+                out.append(sst_at(p, f"SST {i + 1} (PK " + js_fixed(p, 1) + ")"))
+        return out
+
+    n_min = max(1, math.ceil(L / pas_max))
+    n_max = max(n_min, math.ceil(L / pas_min) + 2)
     if cands:
         n_max = min(n_max, len(cands))
+    avec_n1 = D.get("n1") is not False and D.get("n1") != "non"
+    n1_interm = D.get("n1") == "interm"
+    essais: List[Dict[str, Any]] = []
+    vus: Dict[tuple, int] = {}
 
-    avec_n1 = (D.get("n1") not in (False, "non"))
-    n1_interm = (D.get("n1") == "interm")
+    def cle(pos: List[Any]) -> tuple:
+        return tuple(sorted(pos))
 
-    def cle(pos_list: List[Any]) -> str:
-        return ",".join(str(x) for x in sorted(pos_list))
+    def eval_pos(pos: List[Any], n1: bool) -> Dict[str, Any]:
+        sl = liste_sst(pos)
+        pst = postes_pour([s["pk"] for s in sl])
+        return {"pos": list(pos), "sl": sl, "pst": pst, "ev": evaluer(sl, pst, n1)}
 
-    def eval_pos(pos_list: List[Any], n1_flag: bool):
-        sl = liste_sst(pos_list)
-        pst = make_postes_pour([float(s["pk"]) for s in sl])
-        return {"pos": list(pos_list), "sl": sl, "pst": pst, "ev": evaluer(sl, pst, n1_flag)}
-
-    def inserer(pos_list: List[Any], xw: float, k_out: Optional[int]) -> Optional[List[Any]]:
+    def inserer(pos: List[Any], xw: float, k_out: Optional[int]) -> Optional[List[Any]]:
+        """Nouvelle sous-station au point faible."""
         if cands:
-            best_idx = -1
-            best_d = float("inf")
+            best, bd = -1, math.inf
             for j, c in enumerate(cands):
-                if j not in pos_list and abs(c["pk"] - xw) < best_d:
-                    best_d = abs(c["pk"] - xw)
-                    best_idx = j
-            if best_idx < 0:
+                if j not in pos and abs(c["pk"] - xw) < bd:
+                    bd, best = abs(c["pk"] - xw), j
+            if best < 0:
                 return None
-            new_p = list(pos_list) + [best_idx]
-            new_p.sort()
-            return new_p
+            return sorted(pos + [best])
 
-        x_val = round(min(max(xw, d0), d1) * 2.0) / 2.0
-        trop = lambda y: any(abs(float(p) - y) < pas_min - 1e-6 for p in pos_list)
+        x = js_round(min(max(xw, d0), d1) * 2.0) / 2.0
 
-        if trop(x_val):
-            # Déplacement progressif ou insertion au milieu
-            all_pts = sorted([float(p) for p in pos_list] + [d0, d1])
+        def trop(y: float) -> bool:  # trop près d'une sous-station existante
+            return any(abs(p - y) < pas_min - 1e-6 for p in pos)
+
+        if trop(x):
+            # rapprocher du point faible la sous-station voisine la plus proche (hors celle hors service
+            # dans la situation dimensionnante), sans descendre sous la distance minimale
+            tri = sorted(pos)
+            ordre = sorted((j for j in range(len(tri)) if j != k_out), key=lambda j: abs(tri[j] - xw))[:2]
+            if k_out is not None and k_out < len(tri):
+                ordre.append(k_out)  # en dernier recours : la sous-station hors service elle-même
+            for j0 in ordre:
+                p0 = tri[j0]
+                autres = [p for j, p in enumerate(tri) if j != j0]
+                lo = max([d0] + [p + pas_min for p in autres if p < p0])
+                hi = min([d1] + [p - pas_min for p in autres if p > p0])
+                y = js_round((p0 + (xw - p0) / 2.0) * 2.0) / 2.0
+                if abs(y - p0) < 0.5:
+                    y = js_round(xw * 2.0) / 2.0
+                y = min(max(y, math.ceil(lo * 2.0) / 2.0), math.floor(hi * 2.0) / 2.0)
+                if lo <= hi and abs(y - p0) >= 0.5 and js_sign(y - p0) == js_sign(xw - p0):
+                    np2 = sorted(autres + [y])
+                    if not vus.get(cle(np2)):
+                        log("Sous-station du PK " + js_fixed(p0, 1) + " déplacée au PK " + js_fixed(y, 1)
+                            + " (distance minimale " + js_str(pas_min) + " km)")
+                        return np2
+
+        if trop(x):  # milieu de l'intervalle contenant le point faible, puis intervalles voisins
+            bornes = sorted(pos + [d0, d1])
             essais_x = []
-            for q in range(len(all_pts) - 1):
-                mid = round((all_pts[q] + all_pts[q + 1]) / 2.0 * 2.0) / 2.0
-                dist_weak = 0.0 if (all_pts[q] <= xw <= all_pts[q + 1]) else min(abs(xw - all_pts[q]), abs(xw - all_pts[q + 1]))
-                essais_x.append({"x": mid, "d": dist_weak})
-            essais_x.sort(key=lambda item: item["d"])
-
-            x_cand = None
-            for e_item in essais_x:
-                if not trop(e_item["x"]) and e_item["d"] <= pas_max:
-                    x_cand = e_item["x"]
+            for q in range(len(bornes) - 1):
+                a, b = bornes[q], bornes[q + 1]
+                dist = 0.0 if a <= xw <= b else min(abs(xw - a), abs(xw - b))
+                essais_x.append({"x": js_round(a + b) / 2.0, "d": dist})
+            essais_x.sort(key=lambda e: e["d"])
+            x = None
+            for e in essais_x:
+                if not trop(e["x"]) and e["d"] <= pas_max:
+                    x = e["x"]
                     break
-            if x_cand is None:
+            if x is None:
                 return None
-            x_val = x_cand
+        return sorted(pos + [x])
 
-        new_p = list(pos_list) + [x_val]
-        new_p.sort()
-        return new_p
+    def pct(v: float, d: int) -> str:
+        return js_fixed(v * 100.0, d)
 
     pos = placer(n_min)
     etat = None
-    vus = {}
     dernier_echec = ""
     ins_cap = 0
-    essais = []
+    tour = 0
+    while tour < 150:
+        progression(min(0.9, tour / 40.0))
+        r = eval_pos(pos, False)
+        ev = r["ev"]
+        msg = f"{len(pos)} SST : situation normale, marge de tension {pct(ev['marge'], 1)} %"
+        if pU > 0:
+            msg += f", taux de charge max {js_fixed((1.0 - ev['marge_cap']) * 100.0, 0)} %"
+        if not ev["ok"]:
+            msg += (" – " + ev["pire"]["nom"] + " surchargée, renfort vers PK " if ev["pire"].get("cap") else " – point faible PK ") \
+                + js_fixed(ev["pire"]["pk"] or 0.0, 1)
+        log(msg)
+        essais.append({"n": len(pos), "pks": [s["pk"] for s in r["sl"]], "marge": ev["marge"], "pire": ev["pire"]})
 
-    for tour in range(150):
-        progress(min(0.9, tour / 40.0))
-        r_eval = eval_pos(pos, False)
-        marge_pct = r_eval["ev"]["marge"] * 100.0
-        log(f"{len(pos)} SST : situation normale, marge de tension {marge_pct:.1f} %")
-        essais.append({"n": len(pos), "pks": [float(s["pk"]) for s in r_eval["sl"]], "marge": r_eval["ev"]["marge"], "pire": r_eval["ev"]["pire"]})
+        if tour == 0 and pU > 0:  # puissance imposée : nombre minimal pour porter la charge horaire totale
+            tot = sum(s["charge"] for s in ev["cas"][0]["A"]["sst"])
+            nc = math.ceil(tot / (sN * pU) - 1e-9)
+            if len(pos) < nc <= n_max:
+                ins_cap += nc - len(pos)
+                log(f"Charge horaire totale {js_str(js_round(tot))} {unite} : au moins {nc} sous-stations de "
+                    f"{js_str(js_round(pU))} {unite}")
+                pos = placer(nc)
+                vus[cle(pos)] = 1
+                tour += 1
+                continue
 
-        if r_eval["ev"]["ok"] and avec_n1:
+        if ev["ok"] and avec_n1:
             r1 = eval_pos(pos, True)
             essais[-1]["marge_n1"] = r1["ev"]["marge"]
-            log(f"{len(pos)} SST : critère N-1, marge de tension {r1['ev']['marge'] * 100:.1f} % ({r1['ev']['pire']['cas'] if r1['ev']['pire'] else 'ok'})")
+            msg = f"{len(pos)} SST : critère N-1, marge de tension {pct(r1['ev']['marge'], 1)} %"
+            if pU > 0:
+                msg += f", taux de charge max {js_fixed((1.0 - r1['ev']['marge_cap']) * 100.0, 0)} %"
+            log(msg + f" ({r1['ev']['pire']['cas']})")
             if r1["ev"]["ok"]:
                 etat = r1
                 break
-            r_eval = r1
-        elif r_eval["ev"]["ok"]:
-            etat = r_eval
+            r = r1
+            ev = r1["ev"]
+        elif ev["ok"]:
+            etat = r
             break
 
+        pire = ev["pire"]
+        if pire and pire.get("cap"):
+            dernier_echec = f"{pire['nom']} chargée à {js_str(js_round((1.0 - ev['marge_cap']) * 100.0))} % ({pire['cas']})"
+        else:
+            dernier_echec = f"« {pire['cas']} », marge de tension {pct(ev['marge'], 1).replace('.', ',')} %" + (
+                " au PK " + js_fixed(pire["pk"], 1).replace(".", ",") if pire["pk"] is not None else "")
         if len(pos) >= n_max:
             break
-
-        pire_pk = r_eval["ev"]["pire"]["pk"] if (r_eval["ev"]["pire"] and r_eval["ev"]["pire"].get("pk") is not None) else (d0 + d1) / 2.0
-        np_pos = inserer(pos, pire_pk, r_eval["ev"]["pire"].get("k") if r_eval["ev"]["pire"] else None)
-        if not np_pos or cle(np_pos) in vus:
+        np_pos = inserer(pos, pire["pk"] if pire["pk"] is not None else (d0 + d1) / 2.0, pire.get("k"))
+        if not np_pos or vus.get(cle(np_pos)):
             break
+        if pire.get("cap") and len(np_pos) > len(pos):
+            ins_cap += 1
         vus[cle(np_pos)] = 1
         pos = np_pos
+        tour += 1
 
-    retenu = etat
-    if retenu:
-        # Élagage des sous-stations redondantes
+    retenu = None
+    if etat:
+        # élagage : on retire les sous-stations superflues tant que les critères restent satisfaits
         change = True
-        while change and len(retenu["pos"]) > 1:
+        while change and len(etat["pos"]) > 1:
             change = False
-            ordre_idx = list(range(len(retenu["pos"])))
-            ordre_idx.sort(key=lambda idx: retenu["ev"]["cas"][0]["A"]["sst"][idx]["charge"])
-            for idx_cand in ordre_idx:
-                cand_pos = [p for k, p in enumerate(retenu["pos"]) if k != idx_cand]
-                rr = eval_pos(cand_pos, False)
+            charges = [s["charge"] for s in etat["ev"]["cas"][0]["A"]["sst"]]
+            ordre = sorted(range(len(etat["pos"])), key=lambda k: charges[k])
+            for k_or in ordre:
+                cand = [p for k, p in enumerate(etat["pos"]) if k != k_or]
+                rr = eval_pos(cand, False)
                 if not rr["ev"]["ok"]:
                     continue
                 if avec_n1:
-                    rr = eval_pos(cand_pos, True)
+                    rr = eval_pos(cand, True)
                     if not rr["ev"]["ok"]:
                         continue
-                log(f"Élagage : {retenu['sl'][idx_cand]['nom']} n'est pas nécessaire")
-                retenu = rr
+                log("Élagage : " + etat["sl"][k_or]["nom"] + " n'est pas nécessaire")
+                etat = rr
                 change = True
                 break
+        retenu = etat
 
     if not retenu:
         return {
-            "ok": False,
-            "essais": essais,
-            "duree": time.time() - t0,
-            "p_unite": pU or None,
-            "message": f"Aucune solution trouvée (jusqu'à {n_max} sous-stations, pas minimal {pas_min} km).",
+            "ok": False, "essais": essais, "duree": time.time() - t0, "p_unite": pU or None,
+            "message": "Aucune solution trouvée"
+                       + (f" avec des sous-stations de {js_str(js_round(pU))} {unite}" if pU > 0 else "")
+                       + f" (jusqu'à {n_max} sous-stations, distance minimale {js_str(pas_min)} km). "
+                       + (f"Situation la plus défavorable au dernier essai : {dernier_echec}. " if dernier_echec else "")
+                       + "Réduire la distance minimale, ajouter des sites candidats, "
+                       + ("choisir une puissance unitaire plus forte, " if pU > 0 else "")
+                       + "ou revoir le trafic et les seuils.",
         }
 
-    # Calcul des besoins en puissance par sous-station
+    # Puissances : charge horaire en N, en N-1 et pointe 1 min
     besoins = []
     for k, s in enumerate(retenu["sl"]):
         nrm = retenu["ev"]["cas"][0]["A"]["sst"][k]
         cN = nrm["charge"]
         cP = nrm["s_1min"] if ac else nrm["p_1min"]
-        cN1 = 0.0
-        cas_n1 = ""
-        for c_cas in retenu["ev"]["cas"][1:]:
-            x_sst = c_cas["A"]["sst"][k]
-            if not x_sst.get("actif"):
+        cN1, cas_n1 = 0.0, ""
+        for c in retenu["ev"]["cas"][1:]:
+            x = c["A"]["sst"][k]
+            if not x["actif"]:
                 continue
-            v_ch = x_sst["charge"]
-            if v_ch > cN1:
-                cN1 = v_ch
-                cas_n1 = c_cas["nom"]
-            cP = max(cP, x_sst["s_1min"] if ac else x_sst["p_1min"])
-
+            if x["charge"] > cN1:
+                cN1, cas_n1 = x["charge"], c["nom"]
+            cP = max(cP, x["s_1min"] if ac else x["p_1min"])
         req = max(cN / sN, cN1 / sN1, cP / sP)
         if pU > 0:
             choix = pU
         else:
-            candidates = [p for p in std_p if p >= req]
-            choix = candidates[0] if candidates else (int(math.ceil(req / 500.0)) * 500 if not std_p else None)
-
-        besoins.append({
-            "nom": s["nom"],
-            "pk": float(s["pk"]),
-            "charge_n": cN,
-            "charge_n1": cN1,
-            "cas_n1": cas_n1,
-            "pointe": cP,
-            "requis": req,
-            "choix": choix,
-            "taux": (req / choix) if choix else None,
-            "desequilibre_pct": nrm.get("desequilibre_pct"),
-            "scc": s.get("scc_mva", 2000.0),
-        })
+            sup = [p for p in std if p >= req]
+            choix = sup[0] if sup else (None if std else math.ceil(req / 500.0) * 500.0)
+        besoins.append({"nom": s["nom"], "pk": s["pk"], "charge_n": cN, "charge_n1": cN1, "cas_n1": cas_n1,
+                        "pointe": cP, "requis": req, "choix": choix, "taux": req / choix if choix else None,
+                        "desequilibre_pct": nrm.get("desequilibre_pct"), "scc": s.get("scc_mva")})
 
     for k, s in enumerate(retenu["sl"]):
         if ac:
-            s["s_nom_mva"] = (besoins[k]["choix"] / 1000.0) if besoins[k]["choix"] else s.get("s_nom_mva", 20.0)
+            s["s_nom_mva"] = besoins[k]["choix"] / 1000.0 if besoins[k]["choix"] else s["s_nom_mva"]
         else:
-            s["p_nom_kw"] = besoins[k]["choix"] or s.get("p_nom_kw", 6000.0)
+            s["p_nom_kw"] = besoins[k]["choix"] or s["p_nom_kw"]
 
-    progress(1.0)
+    progression(1.0)
     gN = retenu["ev"]["cas"][0]["A"]["glob"]
-
-    cas_summary = [
-        {
-            "nom": c["nom"],
-            "marge": c["marge"],
-            "u_min": c["A"]["glob"]["u_min"],
-            "u_moy": c["A"]["glob"]["u_moy_zone_min"],
-        }
-        for c in retenu["ev"]["cas"]
-    ]
-
     return {
-        "ok": True,
-        "n": len(retenu["sl"]),
-        "sst": retenu["sl"],
-        "postes": retenu["pst"],
-        "besoins": besoins,
-        "cas": cas_summary,
-        "essais": essais,
-        "duree": time.time() - t0,
-        "dt": dt,
-        "p_unite": pU or None,
-        "l_km": L,
-        "d0": d0,
-        "d1": d1,
-        "pertes_kwh": gN["pertes_ligne_kwh"] + gN["pertes_sst_kwh"],
-        "energie_kwh": gN["energie_sst_kwh"],
-        "taux_max": max((b["requis"] / b["choix"] for b in besoins if b["choix"]), default=0.0),
+        "ok": True, "n": len(retenu["sl"]), "sst": retenu["sl"], "postes": retenu["pst"], "besoins": besoins,
+        # situations évaluées, sans les analyses complètes (équivalent d'alleger() en V1)
+        "cas": [{"nom": c["nom"], "marge": c["marge"], "marge_cap": c["marge_cap"],
+                 "u_min": c["A"]["glob"]["u_min"], "u_moy": c["A"]["glob"]["u_moy_zone_min"]}
+                for c in retenu["ev"]["cas"]],
+        "essais": essais, "duree": time.time() - t0, "dt": dt, "p_unite": pU or None, "l_km": L, "d0": d0, "d1": d1,
+        "pertes_kwh": gN["pertes_ligne_kwh"] + gN["pertes_sst_kwh"], "energie_kwh": gN["energie_sst_kwh"],
+        "ajouts_capacite": ins_cap, "n1": ("interm" if n1_interm else True) if avec_n1 else False,
+        "taux_max": max(b["requis"] / b["choix"] if b["choix"] else 0.0 for b in besoins),
     }
 
 
 def comparer_variantes(
     env: SimulationEnv,
     variantes: List[float],
-    dim_opts: Optional[Dict[str, Any]] = None,
-    log_callback: Optional[Callable[[str], None]] = None
+    D: Optional[Dict[str, Any]] = None,
+    progression: Optional[Progression] = None,
+    log: Optional[Journal] = None,
 ) -> List[Dict[str, Any]]:
-    """Compare une liste de puissances unitaires normalisées (ex: 3 MW et 6 MW)."""
+    """Une recherche complète par puissance unitaire imposée (commande « comparer » du worker V1)."""
+    log = log or (lambda _m: None)
+    progression = progression or (lambda _f: None)
+    unite = "kVA" if env.famille != "cc3000" else "kW"
     out = []
-    base_d = dict(dim_opts or {})
-    for pu in variantes:
-        d_var = dict(base_d)
-        d_var["p_unite"] = pu
-        unit_str = "kVA" if env.famille != "cc3000" else "kW"
-        if log_callback:
-            log_callback(f"=== Recherche pour sous-stations de {pu:.0f} {unit_str} ===")
-        res = dimensionner(env, d_var, log_callback=log_callback)
-        res["p_unite"] = pu
-        out.append(res)
+    for i, pu in enumerate(variantes):
+        D2 = {**(D or {}), "p_unite": pu}
+        log(f"=== Variante {i + 1} : sous-stations de {js_str(js_round(pu))} {unite} ===")
+        r = dimensionner(env, D2, lambda f, i=i: progression((i + f) / len(variantes)), lambda t: log("  " + t))
+        r["D"] = D2
+        out.append(r)
+        log(f"  → {r['n']} sous-stations, {len(r['postes'])} postes" if r["ok"] else "  → " + r["message"])
     return out

@@ -9,7 +9,7 @@ import shutil
 
 import pytest
 
-from tests.validation_v1.compare import TOLERANCE, valider, valider_etude
+from tests.validation_v1.compare import TOLERANCE, valider, valider_dimensionnement, valider_etude
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js requis pour le moteur V1")
 
@@ -59,3 +59,19 @@ def test_etude_n1_cc3000_identique_a_v1(projet):
 @pytest.mark.parametrize("projet", PROJETS_AC)
 def test_etude_n1_ac25_identique_a_v1(projet):
     _assert_ecarts(valider_etude(projet, dt=5.0))
+
+
+# Dimensionnement automatique et comparaison des puissances unitaires face au worker V1
+# (paramètres, essais successifs, solution, calibres, marges et journal de recherche identiques)
+def test_dimensionnement_sites_candidats_identique_a_v1():
+    _assert_ecarts(valider_dimensionnement("Exemple_1_25_kV_ligne_nouvelle_A_D_150_km", "dimensionner"))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("projet,mode", [
+    ("Aourdou", "dimensionner"),           # 3 kV, implantation libre (déplacements de SST)
+    ("Aourdou", "comparer"),               # puissance imposée : critère de capacité
+    ("Exemple_2_25_kV_ligne_nouvelle_A_D_150_km", "comparer"),
+])
+def test_dimensionnement_identique_a_v1(projet, mode):
+    _assert_ecarts(valider_dimensionnement(projet, mode))

@@ -17,6 +17,7 @@ from .kinematics import Marche
 from .solver_dc import resoudre_cc, limite_p
 from .solver_ac import resoudre_ac
 from .standards import merge_standards, get_system_family
+from .jscompat import js_fixed, js_round, js_str
 
 
 def parse_time_s(val: Any) -> float:
@@ -669,8 +670,8 @@ def verifications_normatives(analysis: Dict[str, Any], situation: str = "normale
     g = analysis["glob"]
     deg = (situation != "normale")
 
-    def kv_fmt(v: float) -> str:
-        return f"{v / 1000.0:.2f} kV" if ac else f"{int(round(v))} V"
+    def kv_fmt(v: float) -> str:  # textes identiques à ST.verifications (V1)
+        return js_fixed(v / 1000.0, 2).replace(".", ",") + " kV" if ac else js_str(js_round(v)) + " V"
 
     out = []
     seuil_u = float(N.get("umin2") if deg else N.get("umin1"))
@@ -680,7 +681,7 @@ def verifications_normatives(analysis: Dict[str, Any], situation: str = "normale
         "valeur": g["u_min"],
         "seuil": seuil_u,
         "ok": bool(g["u_min"] >= seuil_u),
-        "txt": f"{kv_fmt(g['u_min'])} >= {kv_fmt(seuil_u)}",
+        "txt": f"{kv_fmt(g['u_min'])} ≥ {kv_fmt(seuil_u)}",
     })
 
     su = float(N.get("umoy_zone_degrade") if deg else N.get("umoy_zone"))
@@ -691,18 +692,18 @@ def verifications_normatives(analysis: Dict[str, Any], situation: str = "normale
             "valeur": g["u_moy_zone_min"],
             "seuil": su,
             "ok": bool(g["u_moy_zone_min"] >= su),
-            "txt": f"{kv_fmt(g['u_moy_zone_min'])} >= {kv_fmt(su)}",
+            "txt": f"{kv_fmt(g['u_moy_zone_min'])} ≥ {kv_fmt(su)}",
         })
 
     if not ac and N.get("v_rail_max"):
         v_seuil = float(N["v_rail_max"])
         out.append({
-            "critere": "Potentiel du rail (tension de contact)",
+            "critere": "Potentiel du rail (majorant de la tension de contact)",
             "norme": "EN 50122-1",
             "valeur": g["v_rail_max"],
             "seuil": v_seuil,
             "ok": bool(g["v_rail_max"] <= v_seuil),
-            "txt": f"{int(round(g['v_rail_max']))} V <= {int(v_seuil)} V",
+            "txt": f"{js_str(js_round(g['v_rail_max']))} V ≤ {js_str(v_seuil)} V",
             "indicatif": True,
         })
 
@@ -713,11 +714,11 @@ def verifications_normatives(analysis: Dict[str, Any], situation: str = "normale
                 val = float(s["desequilibre_pct"])
                 out.append({
                     "critere": f"Déséquilibre de tension HT – {s['nom']}",
-                    "norme": "EN 50160 / Gestionnaire HT",
+                    "norme": "EN 50160 / gestionnaire du réseau HT",
                     "valeur": val,
                     "seuil": d_seuil,
                     "ok": bool(val <= d_seuil),
-                    "txt": f"{val:.2f} % <= {d_seuil:.2f} %",
+                    "txt": js_fixed(val, 2).replace(".", ",") + " % ≤ " + js_str(d_seuil).replace(".", ",") + " %",
                 })
 
     return out

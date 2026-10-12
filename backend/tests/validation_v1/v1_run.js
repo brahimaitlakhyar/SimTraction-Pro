@@ -1,7 +1,9 @@
 // Exécute le moteur JavaScript de SimTraction V1 sous Node, sur un projet de la BDD V1.
-// Usage : node v1_run.js <dossier_V1> <projet> <dt> <sortie.json> [simulation|etude]
+// Usage : node v1_run.js <dossier_V1> <projet> <dt> <sortie.json> [mode]
 //   simulation (défaut) : situation normale, avec séries brutes
 //   etude               : commande « simuler » du worker V1 (normale + N-1 + séries allégées)
+//   dimensionner        : commande « dimensionner » (paramètres préparés comme paramsDim)
+//   comparer            : commande « comparer » (une recherche par puissance unitaire)
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const [V1, projet, dtArg, out, mode = "simulation"] = process.argv.slice(2);
 const html = fs.readFileSync(path.join(V1, "SimTraction.html"), "utf8");
@@ -52,6 +54,50 @@ if (mode === "etude") {
   if (!fin || fin.type === "erreur") throw new Error("Échec V1 : " + (fin && fin.message));
   fs.writeFileSync(out, json({ projet: P, etude: fin }));
   console.log(`V1 étude ${projet} dt=${dt}s : ${fin.n1.length} cas N-1, ${(Date.now() - t0) / 1000}s`);
+  return;
+}
+
+if (mode === "dimensionner" || mode === "comparer") {
+  // REGLAGES et paramsDim exactement comme l'interface V1 (parseNum, rendreDimForm, paramsDim)
+  const parseNum = v => {
+    if (v === "" || v == null) return "";
+    const s = String(v).trim().replace(/ |\s/g, "").replace(",", ".");
+    const n = Number(s);
+    return isFinite(n) && s !== "" ? n : v;
+  };
+  const REGLAGES = {};
+  (lire(path.join(bdd, "parametres", "reglages.csv"), B.F.kv) || []).forEach(x => { if (x.code) REGLAGES[x.code] = parseNum(x.valeur); });
+  const reg = (code, defaut) => { const v = REGLAGES[code]; return v === "" || v == null ? (defaut == null ? "" : defaut) : v; };
+  const ac = P.systeme !== "cc3000", sy = "dim." + P.systeme + ".";
+  const champs = [["pas_min_km", reg(sy + "pas_min_km")], ["pas_max_km", reg(sy + "pas_max_km")],
+    ["puissances", String(reg(sy + "puissances")).replace(/\//g, ";")], ["surcharge_n", reg("dim.surcharge_n")],
+    ["surcharge_n1", reg("dim.surcharge_n1")], ["surcharge_pointe", reg(sy + "surcharge_pointe")],
+    ["variantes", String(reg(sy + "variantes", ac ? "20000/40000" : "3000/6000")).replace(/\//g, ";")]];
+  if (!ac) champs.push(["chute_pct", reg(sy + "chute_pct", 6)]);
+  champs.push(ac ? ["pas_at_km", reg(sy + "pas_at_km")] : ["pas_ps_km", reg(sy + "pas_ps_km")]);
+  const src = P.dimensionnement;
+  champs.forEach(c => { src["_def_" + c[0]] = c[1]; });
+  const D = {};
+  Object.keys(src).forEach(k => { if (k.indexOf("_def_") !== 0) D[k] = src[k] === "" || src[k] == null ? src["_def_" + k] : src[k]; });
+  ["pas_min_km", "pas_max_km", "puissances", "surcharge_n", "surcharge_n1", "surcharge_pointe", "pas_at_km", "pas_ps_km", "variantes", "chute_pct"]
+    .forEach(k => { if (D[k] === "" || D[k] == null) D[k] = src["_def_" + k]; });
+  D.n1 = src.n1 === "non" ? false : (src.n1 === "interm" ? "interm" : true); D.dt = +src.dt || 5;
+  champs.forEach(c => { delete src["_def_" + c[0]]; });
+
+  vm.runInContext(bloc('<script type="text/plain" id="worker-src">'), ctxMoteur);
+  const logs = [];
+  let fin = null;
+  const msg = { cmd: mode, projet: projetCalc, D };
+  if (mode === "comparer")
+    msg.variantes = String(D.variantes || "").split(/[;\/\s]+/).map(x => +String(x).replace(",", "."))
+      .filter(x => x > 0).filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b);
+  ctxMoteur.STtraiter(msg, m => {
+    if (m.type === "log") logs.push(m.txt);
+    if (m.type === "fin" || m.type === "erreur") fin = m;
+  });
+  if (!fin || fin.type === "erreur") throw new Error("Échec V1 : " + (fin && fin.message));
+  fs.writeFileSync(out, json({ projet: P, D, variantes: msg.variantes || null, logs, resultat: fin }));
+  console.log(`V1 ${mode} ${projet} : ${(Date.now() - t0) / 1000}s`);
   return;
 }
 
