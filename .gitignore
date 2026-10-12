@@ -56,3 +56,6 @@ data/uploads/
 # OS
 *.bak
 *.tmp
+
+# Local tools (Node binaries - trop volumineux pour GitHub)
+tools/
