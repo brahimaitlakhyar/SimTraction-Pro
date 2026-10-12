@@ -79,9 +79,13 @@ Les projets sont lus dans `SimTraction_V1/BDD` (variable `V1_BDD_DIR`) en attend
 |---|---|---|
 | GET | `/api/v1/projects/` | Liste des projets |
 | GET | `/api/v1/projects/{id}` | Projet complet (tracé, matériel, trafic, alimentation) |
-| POST | `/api/v1/simulation/run` | Lance une étude : `{project_id, dt, couplage, n1}` |
+| POST | `/api/v1/simulation/run` | Lance une étude : `{project_id, dt, couplage, n1, alimentation?}` (alimentation proposée vérifiée sans être enregistrée) |
 | GET | `/api/v1/simulation/status/{task_id}` | Progression (0 → 100 %) |
 | GET | `/api/v1/simulation/result/{task_id}` | Résultats : analyse, conformité, N-1, séries |
+| GET | `/api/v1/dimensioning/parametres/{id}` | Paramètres de dimensionnement par défaut (projet, puis `reglages.csv`) |
+| POST | `/api/v1/dimensioning/run` | Dimensionnement : `{project_id, mode: "dimensionner" \| "comparer", parametres}` |
+| GET | `/api/v1/dimensioning/status/{task_id}` | Progression et journal de recherche |
+| GET | `/api/v1/dimensioning/result/{task_id}` | Sous-stations, postes, calibres, marges (ou variantes comparées) |
 | GET | `/api/v1/materials/` | Bibliothèque du matériel roulant |
 | GET | `/api/v1/references/normes` | Seuils normatifs (`?systeme=cc3000` ou `ac25`) |
 | GET | `/api/v1/references/sites-ht` | Postes HT de raccordement |
@@ -95,7 +99,9 @@ pytest -m slow      # projets 25 kV (plusieurs minutes)
 ```
 
 La non-régression exécute le moteur JavaScript de SimTraction V1 sous Node
-(`tests/validation_v1/v1_run.js`) et vérifie que le moteur Python donne les mêmes résultats à 0,05 % près.
+(`tests/validation_v1/v1_run.js`) et vérifie que le moteur Python donne les mêmes résultats à 0,05 % près :
+simulation, situations N-1, textes de conformité, dimensionnement et comparaison des puissances unitaires
+(solution, calibres, marges et journal de recherche).
 
 ### Frontend (React + Vite)
 

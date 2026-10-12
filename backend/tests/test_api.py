@@ -84,3 +84,62 @@ def test_etude_parametres_invalides():
 
 def test_resultat_tache_inconnue():
     assert client.get("/api/v1/simulation/result/inconnue").status_code == 404
+
+
+# ── Dimensionnement ──────────────────────────────────────────────────
+
+def _attendre_dim(task_id: str, delai: float = 300.0):
+    t0 = time.time()
+    while time.time() - t0 < delai:
+        st = client.get(f"/api/v1/dimensioning/status/{task_id}").json()
+        if st["status"] in ("done", "error"):
+            return st
+        time.sleep(0.3)
+    raise TimeoutError(task_id)
+
+
+def test_parametres_dimensionnement():
+    r = client.get("/api/v1/dimensioning/parametres/Aourdou").json()
+    assert r["systeme"] == "cc3000"
+    # valeurs vides du projet complétées par reglages.csv (dim.cc3000.*)
+    assert r["parametres"]["pas_min_km"] == 8 and r["parametres"]["pas_max_km"] == 30
+    assert r["parametres"]["puissances"] == "3000;4500;6000;9000;12000"
+    assert r["variantes"] == [3000, 6000]
+
+
+def test_dimensionnement_puis_verification():
+    pid = "Casa_Voyageurs_2_Bouskoura_2"
+    r = client.post("/api/v1/dimensioning/run", json={"project_id": pid, "parametres": {"n1": False}})
+    assert r.status_code == 202
+    st = _attendre_dim(r.json()["task_id"])
+    assert st["status"] == "done", st.get("error")
+    assert st["journal"] and "SST" in st["journal"][0]
+
+    res = client.get(f"/api/v1/dimensioning/result/{st['task_id']}").json()
+    sol = res["resultat"]
+    assert sol["ok"] and sol["n"] == len(sol["sst"]) == len(sol["besoins"])
+    assert all(b["choix"] for b in sol["besoins"])
+
+    # La solution proposée, vérifiée par une étude complète sans modifier le projet
+    r = client.post("/api/v1/simulation/run", json={"project_id": pid, "n1": False,
+                                                    "alimentation": {"sst": sol["sst"], "postes": sol["postes"]}})
+    st = _attendre(r.json()["task_id"])
+    assert st["status"] == "done", st.get("error")
+    etude = client.get(f"/api/v1/simulation/result/{st['task_id']}").json()
+    assert [s["nom"] for s in etude["A"]["sst"]] == [s["nom"] for s in sol["sst"]]
+    assert all(c["ok"] or c.get("indicatif") for c in etude["conf"])
+    assert client.get(f"/api/v1/projects/{pid}").json()["alimentation"]["sst"] != sol["sst"]
+
+
+def test_comparaison_sans_variante():
+    r = client.post("/api/v1/dimensioning/run",
+                    json={"project_id": "Aourdou", "mode": "comparer", "parametres": {"variantes": "aucune"}})
+    st = _attendre_dim(r.json()["task_id"])
+    assert st["status"] == "error" and "puissance unitaire" in st["error"]
+
+
+def test_types_de_taches_separes():
+    r = client.post("/api/v1/dimensioning/run", json={"project_id": "inexistant"})
+    assert r.status_code == 404
+    t = client.post("/api/v1/simulation/run", json={"project_id": "Casa_Port_2_Ain_Sebaa_2", "n1": False}).json()
+    assert client.get(f"/api/v1/dimensioning/status/{t['task_id']}").status_code == 404

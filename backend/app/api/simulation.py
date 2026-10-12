@@ -16,7 +16,7 @@ router = APIRouter()
 def run_simulation(req: SimulationRequest):
     """Lance l'étude en tâche de fond et retourne la tâche à suivre."""
     try:
-        return calculs.lancer_etude(req.project_id, req.model_dump(exclude={"project_id"}))
+        return calculs.lancer_etude(req.project_id, req.model_dump(exclude={"project_id"}, exclude_none=True))
     except ProjetIntrouvable:
         raise HTTPException(status_code=404, detail=f"Projet introuvable : {req.project_id}")
 
@@ -25,7 +25,7 @@ def run_simulation(req: SimulationRequest):
 def get_status(task_id: str):
     """Statut et progression (0 → 100 %) d'une étude."""
     t = calculs.etat(task_id)
-    if t is None:
+    if t is None or t["type"] != "etude":
         raise HTTPException(status_code=404, detail="Tâche introuvable")
     return t
 
@@ -37,7 +37,7 @@ def get_result(task_id: str) -> Dict[str, Any]:
     n1 (situations dégradées), series (graphiques), avert, opts, duree.
     """
     t = calculs.resultat(task_id)
-    if t is None:
+    if t is None or t["type"] != "etude":
         raise HTTPException(status_code=404, detail="Tâche introuvable")
     if t["status"] == "error":
         raise HTTPException(status_code=422, detail=t["error"])

@@ -22,22 +22,42 @@ class ProjetResume(BaseModel):
     nb_postes: int
 
 
+class Alimentation(BaseModel):
+    """Sous-stations et postes proposés (ex. solution de dimensionnement), non enregistrés dans le projet."""
+    sst: List[Dict[str, Any]]
+    postes: List[Dict[str, Any]] = []
+
+
 class SimulationRequest(BaseModel):
     project_id: str
     dt: float = Field(5.0, ge=0.5, le=10.0, description="Pas de temps de la simulation (s)")
     couplage: bool = Field(True, description="Effort des engins dépendant de la tension au pantographe")
     n1: Union[bool, Literal["interm"]] = Field(
         True, description="Situations N-1 : toutes les SST (true), intermédiaires seulement (\"interm\") ou aucune (false)")
+    alimentation: Optional[Alimentation] = Field(
+        None, description="Alimentation à vérifier à la place de celle du projet (sans l'enregistrer)")
+
+
+class DimensionnementRequest(BaseModel):
+    project_id: str
+    mode: Literal["dimensionner", "comparer"] = Field(
+        "dimensionner", description="Recherche à puissance adaptée, ou comparaison des puissances unitaires (variantes)")
+    parametres: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Surcharges des paramètres : pas_min_km, pas_max_km, puissances, surcharge_n, surcharge_n1, "
+                    "surcharge_pointe, n1, dt, variantes, chute_pct, pas_ps_km, pas_at_km")
 
 
 class TacheEtat(BaseModel):
     task_id: str
+    type: Literal["etude", "dimensionnement"]
     project_id: str
     opts: Dict[str, Any]
     status: Literal["queued", "running", "done", "error"]
     progress: float
     message: str
     error: Optional[str] = None
+    journal: List[str] = []
     created_at: float
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
@@ -72,4 +92,4 @@ class SiteHT(BaseModel):
     remarque: str
 
 
-__all__ = ["Systeme", "ProjetResume", "SimulationRequest", "TacheEtat", "Materiel", "Norme", "SiteHT", "List"]
+__all__ = ["Systeme", "ProjetResume", "Alimentation", "SimulationRequest", "DimensionnementRequest", "TacheEtat", "Materiel", "Norme", "SiteHT", "List"]

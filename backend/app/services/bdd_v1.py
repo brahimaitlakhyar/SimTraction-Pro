@@ -96,6 +96,26 @@ def lister_sites_ht() -> List[Dict[str, Any]]:
     ]
 
 
+def _parse_num_v1(v: Any) -> Any:
+    """parseNum de V1 : nombre si la valeur en est un (virgule décimale admise), sinon texte inchangé."""
+    if v in ("", None):
+        return ""
+    s = "".join(str(v).split()).replace(",", ".", 1)
+    try:
+        n = float(s)
+    except ValueError:
+        return v
+    if s == "" or n != n or n in (float("inf"), float("-inf")):
+        return v
+    return int(n) if n.is_integer() else n
+
+
+def lire_reglages() -> Dict[str, Any]:
+    """Réglages par défaut (BDD/parametres/reglages.csv) : code → valeur."""
+    rows = read_csv_semicolon(str(_bdd() / "parametres" / "reglages.csv"))
+    return {r["Code"].strip(): _parse_num_v1(r.get("Valeur", "")) for r in rows if r.get("Code", "").strip()}
+
+
 def lister_normes(systeme: Optional[str] = None) -> List[Dict[str, Any]]:
     """Seuils normatifs par défaut (BDD/parametres/normes.csv)."""
     rows = read_csv_semicolon(str(_bdd() / "parametres" / "normes.csv"))
