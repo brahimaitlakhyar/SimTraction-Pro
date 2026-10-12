@@ -1,0 +1,15 @@
+﻿Dossier;Projet;Système;Auteur;Référence;Modifié le;Longueur (km);Engins;Circulations;Sous-stations;Postes;U min dernier calcul (V);Conformité dernier calcul
+Exemple_2_25_kV_ligne_nouvelle_A_D_150_km;Exemple 2×25 kV – ligne nouvelle A–D (150 km);ac2x25;;;2026-10-11 23:50;150;3;6;3;2;;
+Exemple_1_25_kV_ligne_nouvelle_A_D_150_km;Exemple 1×25 kV – ligne nouvelle A–D (150 km);ac1x25;;;2026-10-11 23:50;150;3;6;3;2;;
+Ain_Sebaa_2_Kenitra;Ain Sebaa 2 - Kenitra;cc3000;;RailPower Ain2Keni;2026-10-11 23:50;121,699;10;12;6;2;;
+Ain_Sebaa_2_Kenitra_S_Actuelle;Ain Sebaa 2 - Kenitra S. Actuelle;cc3000;;RailPower Ain2Ken3;2026-10-11 23:50;121,699;10;12;6;2;;
+Casa_Voyageurs_2_Bouskoura_2;Casa Voyageurs 2 - Bouskoura 2;cc3000;;RailPower Bou2CaV2;2026-10-11 23:50;26,414;10;10;3;2;;
+Bouskoura_2_Aeroport;Bouskoura 2 - Aeroport;cc3000;;RailPower Bou2Aero;2026-10-11 23:50;12,329;10;5;1;0;;
+Casa_Port_2_Casa_Voyageurs_2;Casa Port 2 - Casa Voyageurs 2;cc3000;;RailPower CaP2CaV2;2026-10-11 23:50;3,44;10;3;2;1;;
+Casa_Voyageurs_2_Ain_Sebaa_2;Casa Voyageurs 2 - Ain Sebaa 2;cc3000;;RailPower CaV2Ain2;2026-10-11 23:50;3,768;10;3;1;0;;
+Casa_Port_2_Ain_Sebaa_2;Casa Port 2- Ain Sebaa 2;cc3000;;RailPower Cas2Ain2;2026-10-11 23:50;1,336;10;8;1;0;;
+Casa_Port_Casa_Port_2;Casa Port - Casa Port 2;cc3000;;RailPower CasPCaP2;2026-10-11 23:50;5,946;10;8;1;0;;
+Aourdou;Aourdou;cc3000;;RailPower Aourdou;2026-10-11 23:50;60,4;10;13;3;0;;
+Elainaoui;Elainaoui;cc3000;;RailPower Elainaoui;2026-10-11 23:50;60,4;10;13;3;0;;
+Ouajar;Ouajar;cc3000;;RailPower Ouajar;2026-10-11 23:50;60,4;10;9;3;0;;
+Examine_ONCF;Examine ONCF;cc3000;;RailPower ExONCF01;2026-10-11 23:50;59,6;10;2;4;0;;

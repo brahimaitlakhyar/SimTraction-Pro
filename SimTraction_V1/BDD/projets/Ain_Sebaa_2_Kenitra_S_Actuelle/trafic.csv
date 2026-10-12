@@ -1,0 +1,13 @@
+﻿Train (réf.);Sens (1 ou 2);Départ (hh:mm:ss);Voie;Vitesse initiale (km/h);"Arrêts (Gare:durée s ; …)";Libellé
+144;2;00:10:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:60 ; Mohammedia:60 ; Ain Sebaa:60";
+143;2;00:30:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:120 ; Rabat Agdal:120 ; Temara:60 ; Skhirat:60 ; Bouznika:60 ; Mohammedia:60 ; Ain Sebaa:60";
+144;1;00:35:00;1;143;"Ain Sebaa:60 ; Mohammedia:60 ; Rabat Agdal:180 ; Rabat Ville:180 ; Sale:60 ; Sale Tabriquet:60 ; Kenitra:180";
+143;2;00:45:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:120 ; Mohammedia:60 ; Ain Sebaa:60";
+144;1;01:05:00;1;143;"Ain Sebaa:60 ; Mohammedia:60 ; Rabat Agdal:120 ; Rabat Ville:120 ; Sale:60 ; Sale Tabriquet:60 ; Kenitra:60";
+143;2;01:15:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:180 ; Mohammedia:60 ; Ain Sebaa:60";
+143;1;01:21:00;1;100;"Ain Sebaa:60 ; Mohammedia:60 ; Bouznika:60 ; Skhirat:60 ; Temara:60 ; Rabat Agdal:120 ; Rabat Ville:120 ; Sale:60 ; Sale Tabriquet:60 ; Kenitra:120";
+143;2;01:45:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:120 ; Mohammedia:60 ; Ain Sebaa:60";
+143;1;01:52:00;1;100;"Ain Sebaa:60 ; Mohammedia:60 ; Rabat Agdal:120 ; Rabat Ville:120 ; Sale:60 ; Sale Tabriquet:2280";
+145;1;02:05:00;1;143;"Ain Sebaa:60 ; Mohammedia:60 ; Rabat Agdal:120 ; Rabat Ville:120 ; Sale:60 ; Sale Tabriquet:60 ; Kenitra:60";
+144;2;02:09:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:120 ; Mohammedia:60 ; Ain Sebaa:60";
+144;2;02:19:00;2;0;"Sale Tabriquet:60 ; Sale:60 ; Rabat Ville:180 ; Rabat Agdal:60 ; Mohammedia:60 ; Ain Sebaa:60";

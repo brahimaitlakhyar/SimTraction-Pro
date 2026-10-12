@@ -1,0 +1,46 @@
+﻿Code;Paramètre;Valeur
+sim.duree_s;Nouveau projet – durée simulée (s);3600
+sim.periode_s;Nouveau projet – répétition de la grille (s);0
+sim.marge_croisiere;Nouveau projet – consigne de vitesse (fraction de la limite);0,98
+cc.r_cat;3 kV – résistance caténaire par voie (Ω/km);0,049
+cc.r_rail;3 kV – résistance rails par voie (Ω/km);0,0146
+cc.nb_voies;3 kV – nombre de voies;2
+cc.g_rail_terre;3 kV – conductance rail-sol (S/km);0,2
+cc.section_mm2;3 kV – section (mm²);367
+cc.i_adm_a;3 kV – courant admissible par départ (A, 0 = non vérifié);0
+cc.u0;3 kV – tension à vide d'une nouvelle sous-station (V);3600
+cc.r_int;3 kV – résistance interne d'une nouvelle sous-station (Ω);0,05
+ac.u0;25 kV – tension à vide (V);27500
+ac.nb_voies;25 kV – nombre de voies;2
+ac.zc_r;25 kV – caténaire R (Ω/km);0,16
+ac.zc_x;25 kV – caténaire X (Ω/km);0,45
+ac.zf_r;2×25 kV – feeder R (Ω/km);0,12
+ac.zf_x;2×25 kV – feeder X (Ω/km);0,68
+ac.zcf_r;2×25 kV – mutuelle R (Ω/km);0,05
+ac.zcf_x;2×25 kV – mutuelle X (Ω/km);0,32
+ac.s_at_mva;2×25 kV – puissance des AT (MVA);10
+ac.ucc_at_pct;2×25 kV – ucc des AT (%);1
+ac.s_nom_mva;25 kV – puissance d'un nouveau transformateur (MVA);20
+ac.ucc_pct;25 kV – ucc d'un nouveau transformateur (%);10
+ac.scc_mva;25 kV – Scc réseau HT par défaut (MVA);2000
+dim.surcharge_n;Dimensionnement – charge horaire admise en N (× nominale);1
+dim.surcharge_n1;Dimensionnement – surcharge horaire admise en N-1 (× nominale);1,5
+dim.cc3000.pas_min_km;Dimensionnement 3 kV – distance minimale entre SST (km);8
+dim.cc3000.pas_max_km;Dimensionnement 3 kV – distance maximale entre SST (km);30
+dim.cc3000.puissances;Dimensionnement 3 kV – puissances normalisées des groupes (kW, séparées par /);3000/4500/6000/9000/12000
+dim.cc3000.surcharge_pointe;Dimensionnement 3 kV – pointe 1 min admise (× nominale);3
+dim.cc3000.pas_ps_km;Dimensionnement 3 kV – placer un PS entre SST distantes de plus de (km);10
+dim.cc3000.variantes;Dimensionnement 3 kV – puissances unitaires de sous-station à comparer (kW, séparées par /);3000/6000
+dim.cc3000.chute_pct;Dimensionnement 3 kV – chute de tension interne d'un groupe à courant nominal (%, fixe R interne = chute × U0 / I nominal);6
+dim.ac1x25.pas_min_km;Dimensionnement 1×25 kV – distance minimale entre SST (km);25
+dim.ac1x25.pas_max_km;Dimensionnement 1×25 kV – distance maximale entre SST (km);60
+dim.ac1x25.puissances;Dimensionnement 1×25 kV – puissances normalisées (kVA, séparées par /);10000/15000/20000/30000/40000/60000
+dim.ac1x25.surcharge_pointe;Dimensionnement 1×25 kV – pointe 1 min admise (× nominale);2
+dim.ac1x25.pas_at_km;Dimensionnement 1×25 kV – distance max entre postes de parallèle (km);20
+dim.ac1x25.variantes;Dimensionnement 1×25 kV – puissances unitaires à comparer (kVA, séparées par /);20000/40000
+dim.ac2x25.pas_min_km;Dimensionnement 2×25 kV – distance minimale entre SST (km);25
+dim.ac2x25.pas_max_km;Dimensionnement 2×25 kV – distance maximale entre SST (km);90
+dim.ac2x25.puissances;Dimensionnement 2×25 kV – puissances normalisées (kVA, séparées par /);10000/15000/20000/30000/40000/60000
+dim.ac2x25.surcharge_pointe;Dimensionnement 2×25 kV – pointe 1 min admise (× nominale);2
+dim.ac2x25.pas_at_km;Dimensionnement 2×25 kV – distance max entre autotransformateurs (km);15
+dim.ac2x25.variantes;Dimensionnement 2×25 kV – puissances unitaires à comparer (kVA, séparées par /);30000/60000

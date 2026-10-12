@@ -1,0 +1,11 @@
+﻿Train (réf.);Sens (1 ou 2);Départ (hh:mm:ss);Voie;Vitesse initiale (km/h);"Arrêts (Gare:durée s ; …)";Libellé
+144;1;00:37:00;1;157;"Casa Voyageurs:120 ; Mers Sultan:60 ; L'Oasis:60";KM Hassane
+143;1;00:43:00;1;68;"Casa Voyageurs:240 ; L'Oasis:60";A3 ZM 9000
+143;2;00:47:00;2;99;"L'Oasis:60 ; Casa Voyageurs:60";A2 ZM 9000
+150;2;01:00:00;2;80;"Bouskoura:1020 ; Casa Voyageurs:2640";250 E1100
+144;1;01:20:00;1;157;"Casa Voyageurs:120 ; Mers Sultan:60 ; L'Oasis:60";KM Hassane
+143;1;01:26:00;1;68;"Casa Voyageurs:240 ; L'Oasis:60";A3 ZM 9000
+143;2;01:47:00;2;99;"L'Oasis:60 ; Casa Voyageurs:60";A2 ZM 9000
+150;2;02:00:00;2;80;"Bouskoura:1020 ; Casa Voyageurs:2640";250 E1100
+144;1;02:03:00;1;157;"Casa Voyageurs:120 ; Mers Sultan:60 ; L'Oasis:60";KM Hassane
+143;1;02:09:00;1;68;"Casa Voyageurs:240 ; L'Oasis:60";A3 ZM 9000

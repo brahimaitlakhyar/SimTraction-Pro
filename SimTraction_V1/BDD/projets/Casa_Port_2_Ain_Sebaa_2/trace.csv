@@ -1,0 +1,7 @@
+﻿PK début (km);PK fin (km);Déclivité (‰);Rayon (m, 0 = alignement);Limite (km/h, 0 = aucune);Gare;Majoration tunnel (ex. 0,2)
+4,313;4,413;1,552;700;0;Casa Port 2;0
+4,413;4,473;3,82;0;0;;0
+4,473;5,185;8,53;600;76,368;;0
+5,185;5,41;0,28;0;0;;0
+5,41;5,549;4,97;0;0;;0
+5,549;5,649;4,97;0;0;Ain Sebaa 2;0

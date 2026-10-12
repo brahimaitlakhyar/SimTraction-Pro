@@ -1,0 +1,138 @@
+﻿SIMTRACTION – ÉTUDE DE PUISSANCE DE TRACTION (3 kV CC / 1×25 kV / 2×25 kV)
+Installation sur un PC portable Windows
+=========================================================================
+
+CONTENU DU DOSSIER
+  SimTraction.html ........ le logiciel (un seul fichier, aucune installation)
+  BDD\ .................... la base de données (fichiers CSV)
+     projets.csv .......... liste des projets (index)
+     materiel.csv ......... bibliothèque du matériel roulant
+     sites_ht.csv ......... postes HT du réseau (puissance de court-circuit)
+     parametres\normes.csv    seuils normatifs (EN 50163, EN 50388, EN 50122…)
+     parametres\reglages.csv  valeurs par défaut (nouveaux projets, dimensionnement)
+     projets\<nom>\ ....... un dossier par projet, 7 fichiers CSV :
+        parametres.csv, trace.csv, materiel.csv, trafic.csv,
+        sous_stations.csv, postes.csv, sites.csv
+  INSTALLATION.txt ........ ce document
+
+
+1. COPIER LES FICHIERS (une seule fois)
+---------------------------------------
+  a) Décompressez le fichier ZIP, par exemple dans  C:\SimTraction
+     (clic droit sur le ZIP > « Extraire tout… »).
+  b) Vérifiez que SimTraction.html et le dossier BDD sont côte à côte :
+        C:\SimTraction\SimTraction.html
+        C:\SimTraction\BDD\
+  c) Ne mettez pas le dossier dans « Téléchargements » ou dans un dossier
+     système (Windows, Program Files) : Chrome refuse d'y écrire.
+     Documents, le Bureau ou C:\SimTraction conviennent.
+  d) Facultatif : clic droit sur SimTraction.html > Envoyer vers >
+     Bureau (créer un raccourci).
+
+
+2. NAVIGATEUR
+-------------
+  Utilisez Google Chrome ou Microsoft Edge (version récente).
+  Firefox et Safari ne permettent pas à une page d'écrire dans un dossier :
+  le logiciel s'y ouvre, mais sans base de données.
+
+  Conseil : clic droit sur SimTraction.html > Ouvrir avec > Choisir une
+  autre application > Chrome (ou Edge) > cocher « Toujours utiliser… ».
+
+
+3. PREMIER LANCEMENT : RELIER LA BASE
+-------------------------------------
+  a) Double-cliquez sur SimTraction.html.
+  b) Un bandeau orange indique « Aucune base connectée ».
+     Cliquez sur « Choisir le dossier BDD ».
+  c) Dans la fenêtre, sélectionnez le dossier  C:\SimTraction\BDD
+     (sélectionner C:\SimTraction convient aussi : le logiciel descend
+     tout seul dans BDD) puis « Sélectionner le dossier ».
+  d) Le navigateur demande « Autoriser SimTraction à modifier les fichiers ? »
+     Répondez « Modifier les fichiers » (ou « Autoriser »).
+  e) La pastille en haut affiche « ● Base « BDD » ». Le menu « Projets ▾ »
+     liste les 14 projets fournis.
+
+
+4. LANCEMENTS SUIVANTS
+----------------------
+  Le logiciel se souvient du dossier. Pour des raisons de sécurité, Chrome
+  redemande l'autorisation à chaque nouvelle session : cliquez sur
+  « Reconnecter » dans le bandeau, puis « Autoriser ».
+  Avec Chrome/Edge récents, la fenêtre d'autorisation propose
+  « Autoriser à chaque visite » : choisissez-la pour ne plus avoir à cliquer.
+  Le dernier projet ouvert est rouvert automatiquement.
+
+
+5. UTILISATION DE LA BASE
+-------------------------
+  - Ouvrir un projet : menu « Projets ▾ » ou page « Base de données ».
+  - Nouveau projet : bouton « Nouveau », saisir le nom, puis « Enregistrer ».
+    Le dossier BDD\projets\<nom>\ est créé.
+  - Ensuite chaque modification est enregistrée automatiquement dans les
+    CSV du projet (1 à 2 s après la saisie ; voir l'heure dans la pastille).
+  - Variante : page Base de données > « Enregistrer comme variante ».
+  - Suppression : bouton « Supprimer » puis « Confirmer la suppression »
+    (le dossier du projet est effacé).
+  - Bibliothèque matériel, postes HT, seuils normatifs et réglages par
+    défaut : page « Base de données ». Toute modification met à jour
+    materiel.csv, sites_ht.csv, normes.csv ou reglages.csv.
+  - Les seuils d'un projet (page Projet) priment sur normes.csv ; une case
+    vide reprend la valeur de normes.csv.
+  - Comparer des puissances de sous-station (ex. 3 MW et 6 MW) : page
+    Dimensionnement, champ « Puissances unitaires à comparer » (3000 ; 6000),
+    puis « Comparer les puissances unitaires ». Chaque variante donne son
+    nombre de sous-stations, de postes, leur implantation (schéma) et ses
+    marges ; « Voir le détail » puis « Appliquer au projet » pour la retenir.
+    Valeurs par défaut : dim.cc3000.variantes dans parametres\reglages.csv.
+
+
+6. MODIFIER LES CSV DANS EXCEL
+------------------------------
+  Les fichiers sont lisibles et modifiables directement :
+  séparateur point-virgule ( ; ), virgule décimale, encodage UTF-8.
+  a) Ouvrez le fichier CSV dans Excel (double-clic), modifiez.
+  b) Enregistrez au format « CSV UTF-8 (délimité par des virgules) » —
+     avec Excel en français, le séparateur produit est bien « ; ».
+     Gardez la première ligne (titres de colonnes) telle quelle.
+  c) Fermez le fichier dans Excel (Excel le verrouille tant qu'il est ouvert).
+  d) Dans SimTraction : page Base de données > « Relire la base »,
+     puis rouvrez le projet.
+  Si vous ajoutez ou copiez un dossier de projet à la main dans
+  BDD\projets\, cliquez sur « Reconstruire l'index » pour mettre à jour
+  projets.csv.
+  Ne modifiez pas un CSV dans Excel pendant que le même projet est ouvert
+  et modifié dans SimTraction : la dernière sauvegarde écrase l'autre.
+
+  Les tableaux de saisie ont aussi des boutons d'import/export Excel
+  (.xlsx) ; la page Projet exporte ou importe un classeur complet.
+
+
+7. SAUVEGARDE ET PARTAGE
+------------------------
+  - Toute la base tient dans le dossier BDD : copiez-le régulièrement
+    (clé USB, OneDrive, serveur). Pour restaurer, recopiez-le et
+    reconnectez-le.
+  - Travail en équipe : le dossier BDD peut être placé sur un partage
+    réseau ou un dossier OneDrive/SharePoint synchronisé ; chaque poste
+    choisit ce dossier. Évitez que deux personnes modifient le même
+    projet en même temps.
+  - Pour transmettre une étude : copiez seulement BDD\projets\<nom>\ ;
+    le destinataire le colle dans son BDD\projets\ puis clique
+    « Reconstruire l'index ».
+
+
+8. DÉPANNAGE
+------------
+  « Base non connectée » après ouverture
+      → cliquez « Reconnecter » ou « Choisir le dossier BDD ».
+  « Ce dossier contient des fichiers système » / refus d'accès
+      → déplacez SimTraction hors de Téléchargements / Program Files.
+  Le bouton « Choisir le dossier BDD » est absent
+      → vous êtes sous Firefox/Safari : ouvrez le fichier avec Chrome ou Edge.
+  Les accents s'affichent mal dans Excel
+      → Données > À partir d'un fichier texte/CSV > Origine 65001 : UTF-8.
+  Un projet modifié dans Excel ne change pas
+      → « Relire la base » puis rouvrir le projet.
+  PC hors ligne : le logiciel fonctionne entièrement sans Internet
+      (seule la police d'affichage est remplacée par celle du système).

@@ -1,0 +1,42 @@
+﻿Code;Paramètre;Valeur
+id;Identifiant (nom du dossier);Casa_Voyageurs_2_Bouskoura_2
+nom;Nom du projet;Casa Voyageurs 2 - Bouskoura 2
+auteur;Auteur;
+reference;Référence;RailPower Bou2CaV2
+description;Objet de l'étude;Étude RailPower Bou2CaV2 (grille 1, alimentation 1) importée.
+systeme;Système (cc3000, ac1x25, ac2x25);cc3000
+modifie;Modifié le;2026-10-11 23:50
+duree_s;Durée simulée (s);9000
+periode_s;Répétition de la grille (s);0
+marge_croisiere;Consigne de vitesse (fraction de la limite);0,98
+trace.vitesse_ligne;Vitesse de ligne (km/h);0
+alimentation.cc.r_cat;3 kV – résistance caténaire par voie (Ω/km);0,058442
+alimentation.cc.r_rail;3 kV – résistance rails par voie (Ω/km);0,014615
+alimentation.cc.nb_voies;3 kV – nombre de voies;2
+alimentation.cc.g_rail_terre;3 kV – conductance rail-sol (S/km);0,2
+alimentation.cc.section_mm2;3 kV – section équivalente (mm²);308
+alimentation.cc.i_adm_a;3 kV – courant admissible par départ (A);0
+alimentation.ac.u0;25 kV – tension à vide (V);27500
+alimentation.ac.nb_voies;25 kV – nombre de voies;2
+alimentation.ac.zc_r;25 kV – caténaire R (Ω/km);0,16
+alimentation.ac.zc_x;25 kV – caténaire X (Ω/km);0,45
+alimentation.ac.zf_r;2×25 kV – feeder R (Ω/km);0,12
+alimentation.ac.zf_x;2×25 kV – feeder X (Ω/km);0,68
+alimentation.ac.zcf_r;2×25 kV – mutuelle R (Ω/km);0,05
+alimentation.ac.zcf_x;2×25 kV – mutuelle X (Ω/km);0,32
+alimentation.ac.s_at_mva;2×25 kV – puissance des AT (MVA);10
+alimentation.ac.ucc_at_pct;2×25 kV – ucc des AT (%);1
+dimensionnement.pas_min_km;Dimensionnement – distance minimale entre SST (km);
+dimensionnement.pas_max_km;Dimensionnement – distance maximale entre SST (km);
+dimensionnement.puissances;Dimensionnement – puissances normalisées (kW ou kVA, séparées par /);
+dimensionnement.surcharge_n;Dimensionnement – charge horaire admise en N (× nominale);
+dimensionnement.surcharge_n1;Dimensionnement – surcharge horaire admise en N-1 (× nominale);
+dimensionnement.surcharge_pointe;Dimensionnement – pointe 1 min admise (× nominale);
+dimensionnement.n1;Dimensionnement – critère N-1 (oui / interm / non);oui
+dimensionnement.pas_ps_km;Dimensionnement – PS au-delà de (km);
+dimensionnement.pas_at_km;Dimensionnement – distance max entre postes AT/SSP (km);
+dimensionnement.dt;Dimensionnement – pas de temps (s);5
+dimensionnement.variantes;Dimensionnement – puissances unitaires à comparer (kW ou kVA, séparées par /);
+dimensionnement.chute_pct;Dimensionnement 3 kV – chute de tension interne des groupes à courant nominal (%);
+_dernier.u_min;Dernier calcul – tension minimale (V);
+_dernier.conforme;Dernier calcul – conforme (oui/non);

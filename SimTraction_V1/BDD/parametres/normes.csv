@@ -1,0 +1,25 @@
+﻿Système (cc3000 / ac25);Code;Paramètre;Valeur;Référence
+cc3000;un;Tension nominale (V);3000;Tension nominale
+cc3000;umin2;Umin2 – tension minimale non permanente (V);2000;EN 50163
+cc3000;umin1;Umin1 – tension minimale permanente (V);2000;EN 50163
+cc3000;umax1;Umax1 (V);3600;EN 50163
+cc3000;umax2;Umax2 (V);3900;EN 50163
+cc3000;umoy_zone;Tension moyenne utile, zone (V);2700;EN 50388-1 (à confirmer selon la catégorie de ligne)
+cc3000;umoy_train;Tension moyenne utile, train (V);2600;EN 50388-1 (à confirmer selon la catégorie de ligne)
+cc3000;umoy_zone_degrade;Tension moyenne utile en N-1 (V);2600;Choix de l'étude (situation N-1)
+cc3000;u_lim_haut;Début de réduction de puissance des engins (V);2000;EN 50388-1 – début de réduction de puissance des engins
+cc3000;u_lim_bas;Puissance des engins nulle (V);1000;EN 50388-1 – puissance nulle
+cc3000;u_max_recup;Tension maximale de récupération (V);3800;Limite de récupération (rhéostat au-delà)
+cc3000;v_rail_max;Potentiel du rail maximal (V);120;EN 50122-1 (indicatif)
+ac25;un;Tension nominale (V);25000;Tension nominale
+ac25;umin2;Umin2 – tension minimale non permanente (V);17500;EN 50163
+ac25;umin1;Umin1 – tension minimale permanente (V);19000;EN 50163
+ac25;umax1;Umax1 (V);27500;EN 50163
+ac25;umax2;Umax2 (V);29000;EN 50163
+ac25;umoy_zone;Tension moyenne utile, zone (V);22000;EN 50388-1 (à confirmer selon la catégorie de ligne)
+ac25;umoy_train;Tension moyenne utile, train (V);21000;EN 50388-1 (à confirmer selon la catégorie de ligne)
+ac25;umoy_zone_degrade;Tension moyenne utile en N-1 (V);21000;Choix de l'étude (situation N-1)
+ac25;u_lim_haut;Début de réduction de puissance des engins (V);19000;EN 50388-1 – début de réduction de puissance des engins
+ac25;u_lim_bas;Puissance des engins nulle (V);17500;EN 50388-1 – puissance nulle
+ac25;u_max_recup;Tension maximale de récupération (V);29000;Limite de récupération (rhéostat au-delà)
+ac25;desequilibre_max_pct;Déséquilibre HT maximal (%);2;EN 50160 / gestionnaire du réseau HT

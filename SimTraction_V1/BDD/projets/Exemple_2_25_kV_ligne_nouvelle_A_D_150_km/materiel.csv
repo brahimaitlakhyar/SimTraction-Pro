@@ -1,0 +1,4 @@
+﻿Réf.;Désignation;Modèle de traction (serie_cc / tabule);Masse (t);Masse dynamique (t);Longueur (m);Effort max (kN);v1 (km/h, moteur série);Vmax (km/h);P max jante (kW);Rendement;Auxiliaires (kW);cos φ;U nominale (V);Davis A (kN);Davis B (kN/(km/h));Davis C (kN/(km/h)²);Coef. courbe (kN·m);c2 (Ω);c3 (kN/A²);I aux (A);Frein élec. (kN);P frein élec. (kW);Récupération (0–1);Décél. service (m/s²)
+301;Rame grande vitesse 25 kV (exemple indicatif);tabule;424;450;200;220;0;320;8800;0,86;300;0,98;25000;2,7;0,032;0,000535;1980;0;0;0;200;8000;0,8;0,6
+302;Automotrice régionale 25 kV (exemple indicatif);tabule;250;270;110;200;0;160;4000;0,85;150;0,98;25000;3;0,03;0,0007;1170;0;0;0;160;3500;0,8;0,7
+303;Locomotive fret 5,6 MW + 1 500 t (exemple indicatif);tabule;1590;1660;650;320;0;100;5600;0,85;120;0,98;25000;24;0,05;0,006;7425;0;0;0;150;4000;0,7;0,25

@@ -1,0 +1,4 @@
+﻿Nom;PK (km);En service (oui/non);U0 à vide (V);R interne (Ω) – 3 kV;P nominale (kW) – 3 kV;S transfo (MVA) – 25 kV;ucc (%) – 25 kV;Scc réseau HT (MVA) – 25 kV
+SS B;10,2;oui;3600;0,1;0;;;
+SS D;35,2;oui;3600;0,1;0;;;
+SS F;60,2;oui;3600;0,1;0;;;
