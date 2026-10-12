@@ -42,8 +42,10 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      V1_BDD_DIR: /data/bdd_v1
     volumes:
       - uploads_data:/app/uploads
+      - ./SimTraction_V1/BDD:/data/bdd_v1:ro   # projets V1 (en attendant PostgreSQL)
     depends_on:
       db:
         condition: service_healthy

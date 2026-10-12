@@ -1,14 +1,13 @@
-﻿"""
+"""
 SimTraction Pro - Backend FastAPI
 Point d'entrée principal de l'API REST.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import os
 
-from app.api import projects, simulation, materials, substations, health
+from app.api import health, materials, projects, references, simulation
+from app.core.config import get_settings
 
 app = FastAPI(
     title="SimTraction Pro API",
@@ -19,12 +18,9 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────
-cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
-cors_origins = [o.strip() for o in cors_origins_raw.split(",")]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=get_settings().cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +31,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
 app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["Simulation"])
 app.include_router(materials.router, prefix="/api/v1/materials", tags=["Materials"])
-app.include_router(substations.router, prefix="/api/v1/substations", tags=["Substations"])
+app.include_router(references.router, prefix="/api/v1/references", tags=["References"])
 
 
 @app.get("/")

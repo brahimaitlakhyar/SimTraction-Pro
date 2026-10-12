@@ -8,7 +8,7 @@ SimTraction Pro est un logiciel full-stack de simulation et dimensionnement des 
 
 ## Architecture
 
-`
+```
 SimTraction Pro
 ├── backend/          # API FastAPI + moteur de calcul Python
 │   ├── app/
@@ -30,7 +30,7 @@ SimTraction Pro
 ├── SimTraction_V1/   # Version originale (référence)
 ├── docker-compose.yml
 └── README.md
-`
+```
 
 ## Fonctionnalités
 
@@ -43,7 +43,7 @@ SimTraction Pro
 
 ## Installation rapide (Docker)
 
-`ash
+```bash
 # Cloner le dépôt
 git clone https://github.com/BrahimAitLakhyar/SimTraction-Pro.git
 cd SimTraction-Pro
@@ -53,7 +53,7 @@ cp .env.example .env
 
 # Démarrer tous les services
 docker compose up --build
-`
+```
 
 Application disponible sur : http://localhost:3000
 
@@ -61,23 +61,49 @@ Application disponible sur : http://localhost:3000
 
 ### Backend (FastAPI)
 
-`ash
+Python 3.12 recommandé.
+
+```bash
 cd backend
-python -m venv .venv
+py -3.12 -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
-`
+```
 
 API Swagger : http://localhost:8000/docs
 
+Les projets sont lus dans `SimTraction_V1/BDD` (variable `V1_BDD_DIR`) en attendant la base PostgreSQL.
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/v1/projects/` | Liste des projets |
+| GET | `/api/v1/projects/{id}` | Projet complet (tracé, matériel, trafic, alimentation) |
+| POST | `/api/v1/simulation/run` | Lance une étude : `{project_id, dt, couplage, n1}` |
+| GET | `/api/v1/simulation/status/{task_id}` | Progression (0 → 100 %) |
+| GET | `/api/v1/simulation/result/{task_id}` | Résultats : analyse, conformité, N-1, séries |
+| GET | `/api/v1/materials/` | Bibliothèque du matériel roulant |
+| GET | `/api/v1/references/normes` | Seuils normatifs (`?systeme=cc3000` ou `ac25`) |
+| GET | `/api/v1/references/sites-ht` | Postes HT de raccordement |
+
+### Tests
+
+```bash
+cd backend
+pytest              # API + non-régression contre V1 sur les projets 3 kV (Node.js requis)
+pytest -m slow      # projets 25 kV (plusieurs minutes)
+```
+
+La non-régression exécute le moteur JavaScript de SimTraction V1 sous Node
+(`tests/validation_v1/v1_run.js`) et vérifie que le moteur Python donne les mêmes résultats à 0,05 % près.
+
 ### Frontend (React + Vite)
 
-`ash
+```bash
 cd frontend
 npm install
 npm run dev
-`
+```
 
 Frontend : http://localhost:5173
 
@@ -88,7 +114,7 @@ Copier .env.example en .env et configurer :
 | Variable | Description | Défaut |
 |---|---|---|
 | DATABASE_URL | URL PostgreSQL | sqlite:///./simtraction.db |
-| REDIS_URL | URL Redis (file de tâches) | edis://localhost:6379 |
+| REDIS_URL | URL Redis (file de tâches) | redis://localhost:6379 |
 | SECRET_KEY | Clé JWT | à générer |
 | CORS_ORIGINS | Origines CORS autorisées | http://localhost:5173 |
 

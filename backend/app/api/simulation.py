@@ -1,78 +1,46 @@
-﻿"""
-API de simulation – Lance et récupère les résultats de simulation.
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-import uuid, asyncio, time
+API de simulation – lance une étude (situation normale + N-1) et en récupère les résultats.
+"""
+from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException
+
+from app.schemas import SimulationRequest, TacheEtat
+from app.services import calculs
+from app.services.bdd_v1 import ProjetIntrouvable
 
 router = APIRouter()
 
-# In-memory task store (replace with Redis/Celery in production)
-_tasks: Dict[str, Dict] = {}
 
-
-class SimulationRequest(BaseModel):
-    project_id: str
-    system_type: str = "AC25kV_2x25"  # DC3000, AC25kV_1x25, AC25kV_2x25
-    peak_hour_trains: int = 8
-    headway_min: float = 7.5
-    apply_n1: bool = True
-    regenerative_braking: bool = True
-    extra_params: Optional[Dict[str, Any]] = None
-
-
-async def _run_simulation(task_id: str, req: SimulationRequest):
-    """Simulate asynchronously (mock – replace with real physics engine call)."""
-    _tasks[task_id]["status"] = "running"
-    _tasks[task_id]["progress"] = 0
+@router.post("/run", response_model=TacheEtat, status_code=202)
+def run_simulation(req: SimulationRequest):
+    """Lance l'étude en tâche de fond et retourne la tâche à suivre."""
     try:
-        # Simulate computation delay
-        for i in range(1, 11):
-            await asyncio.sleep(0.5)
-            _tasks[task_id]["progress"] = i * 10
-
-        # Mock result (replace with actual physics engine output)
-        _tasks[task_id]["result"] = {
-            "v_min_kV": 18.4,
-            "v_max_kV": 27.5,
-            "i_max_A": 1240,
-            "energy_mwh": 14.7,
-            "recovered_mwh": 3.2,
-            "n1_compliant": True,
-            "voltage_compliant": True,
-            "duration_s": 5.2,
-            "trains_simulated": req.peak_hour_trains,
-        }
-        _tasks[task_id]["status"] = "done"
-    except Exception as e:
-        _tasks[task_id]["status"] = "error"
-        _tasks[task_id]["error"] = str(e)
+        return calculs.lancer_etude(req.project_id, req.model_dump(exclude={"project_id"}))
+    except ProjetIntrouvable:
+        raise HTTPException(status_code=404, detail=f"Projet introuvable : {req.project_id}")
 
 
-@router.post("/run")
-async def run_simulation(req: SimulationRequest, background_tasks: BackgroundTasks):
-    """Lance une simulation et retourne un task_id pour suivi."""
-    task_id = str(uuid.uuid4())
-    _tasks[task_id] = {"status": "queued", "progress": 0, "result": None}
-    background_tasks.add_task(_run_simulation, task_id, req)
-    return {"task_id": task_id, "status": "queued"}
-
-
-@router.get("/status/{task_id}")
-async def get_status(task_id: str):
-    """Retourne le statut et la progression d'une simulation."""
-    if task_id not in _tasks:
+@router.get("/status/{task_id}", response_model=TacheEtat)
+def get_status(task_id: str):
+    """Statut et progression (0 → 100 %) d'une étude."""
+    t = calculs.etat(task_id)
+    if t is None:
         raise HTTPException(status_code=404, detail="Tâche introuvable")
-    return _tasks[task_id]
+    return t
 
 
 @router.get("/result/{task_id}")
-async def get_result(task_id: str):
-    """Retourne les résultats complets d'une simulation terminée."""
-    if task_id not in _tasks:
+def get_result(task_id: str) -> Dict[str, Any]:
+    """
+    Résultats d'une étude terminée : A (analyse : glob, sst, trains, zones), conf (conformité),
+    n1 (situations dégradées), series (graphiques), avert, opts, duree.
+    """
+    t = calculs.resultat(task_id)
+    if t is None:
         raise HTTPException(status_code=404, detail="Tâche introuvable")
-    task = _tasks[task_id]
-    if task["status"] != "done":
-        raise HTTPException(status_code=202, detail=f"Simulation en cours: {task['status']}")
-    return task["result"]
+    if t["status"] == "error":
+        raise HTTPException(status_code=422, detail=t["error"])
+    if t["status"] != "done":
+        raise HTTPException(status_code=409, detail=f"Étude non terminée : {t['status']}")
+    return t["result"]
